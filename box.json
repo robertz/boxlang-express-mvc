@@ -27,6 +27,10 @@
     "devDependencies":{
         "testbox":"^7.1.0+20"
     },
+    "scripts":{
+        "preVersion":"!boxlang run-tests.bxs",
+        "postPublish":"!git push --follow-tags && bash scripts/release.sh"
+    },
     "installPaths":{
         "testbox":"testbox/"
     },
@@ -36,6 +40,8 @@
         "examples/**",
         "run-tests.bxs",
         "setup-tests.bxs",
-        "testbox/**"
+        "testbox/**",
+        "wirebox/**",
+        "scripts/**"
     ]
 }
