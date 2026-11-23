@@ -1,0 +1,41 @@
+{
+    "name":"boxlang-express-mvc",
+    "version":"0.1.0",
+    "author":"Robert Zehnder",
+    "slug":"boxlang-express-mvc",
+    "shortDescription":"ColdBox-style handlers, routes, views and layouts for BoxExpress",
+    "type":"boxlang-modules",
+    "keywords":[
+        "boxlang",
+        "express",
+        "mvc",
+        "coldbox"
+    ],
+    "homepage":"https://github.com/robertz/boxlang-express-mvc",
+    "repository":{
+        "type":"git",
+        "URL":"https://github.com/robertz/boxlang-express-mvc"
+    },
+    "boxlang":{
+        "minimumVersion":"1.15.0",
+        "moduleName":"boxexpressmvc"
+    },
+    "private":false,
+    "dependencies":{
+        "boxlang-express":"^0.2.27"
+    },
+    "devDependencies":{
+        "testbox":"^7.1.0+20"
+    },
+    "installPaths":{
+        "testbox":"testbox/"
+    },
+    "ignore":[
+        "**/.*",
+        "tests/**",
+        "examples/**",
+        "run-tests.bxs",
+        "setup-tests.bxs",
+        "testbox/**"
+    ]
+}

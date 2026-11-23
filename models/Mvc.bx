@@ -1,0 +1,414 @@
+/**
+ * Handlers are singletons shared by every concurrent request. Everything
+ * in this object's variables scope is built in init(), before listen(),
+ * and only read afterwards.
+ */
+class {
+
+	static {
+		RESERVED_ACTIONS = "init,preHandler,postHandler"
+		HTTP_METHODS = "GET,POST,PUT,PATCH,DELETE,HEAD,ALL"
+	}
+
+	function init( config = {} ) {
+		for ( var key in config ) {
+			if ( !listFindNoCase( "handlers,views,layouts,defaultLayout,routes,services,injector", key ) ) {
+				throw( type = "BoxExpressMvc.InvalidConfig", message = "Unknown boxExpressMvc() setting: #key#" )
+			}
+		}
+		if ( !len( config.handlers ?: "" ) || !directoryExists( config.handlers ) ) {
+			throw( type = "BoxExpressMvc.InvalidConfig", message = "boxExpressMvc() needs handlers: the path of an existing directory" )
+		}
+
+		variables.config = config
+		variables.handlers = {}
+		variables.namedRoutes = {}
+		variables.eventRoutes = {}
+		variables.conventionPaths = []
+		variables.openRoutes = []
+		variables.finalized = false
+		variables.expressRouter = new bxModules.boxexpress.models.Router()
+
+		_loadHandlers( config.handlers )
+		_injectHandlers( config )
+		_configureViews( config )
+		if ( len( config.routes ?: "" ) ) {
+			_loadRoutes( config.routes )
+		}
+		return this
+	}
+
+	/**
+	 * The plain BoxExpress router holding every route. Calling it ends
+	 * route registration.
+	 */
+	function router() {
+		if ( !variables.finalized ) {
+			for ( var open in variables.openRoutes ) {
+				if ( !open.isDone() ) {
+					throw( type = "BoxExpressMvc.InvalidRoute", message = "route( ""#open.getPath()#"" ) was never finished with to(), toHandler() or end()" )
+				}
+			}
+			variables.conventionPaths.each( ( path ) => _registerConventionRoute( path ) )
+			variables.finalized = true
+		}
+		return variables.expressRouter
+	}
+
+	/**
+	 * Handler name to its action names, for listing what an app serves.
+	 */
+	function getHandlers() {
+		var listing = {}
+		for ( var name in variables.handlers ) {
+			var entry = variables.handlers[ name ]
+			listing[ entry.name ] = entry.actions.keyArray().map( ( key ) => entry.actions[ key ] ).sort( "textnocase" )
+		}
+		return listing
+	}
+
+	function route( path, target = "", name = "" ) {
+		if ( isSimpleValue( target ) && !len( target ) ) {
+			var builder = new RouteBuilder( this, path )
+			variables.openRoutes.append( builder )
+			return builder
+		}
+		addRoute( "ALL", path, target, name )
+		return this
+	}
+
+	function resources( name ) {
+		addRoute( "GET", "/#name#", "#name#.index" )
+		addRoute( "GET", "/#name#/new", "#name#.new" )
+		addRoute( "POST", "/#name#", "#name#.create" )
+		addRoute( "GET", "/#name#/:id", "#name#.show" )
+		addRoute( "GET", "/#name#/:id/edit", "#name#.edit" )
+		addRoute( "PUT,PATCH", "/#name#/:id", "#name#.update" )
+		addRoute( "DELETE", "/#name#/:id", "#name#.delete" )
+		return this
+	}
+
+	/**
+	 * A path with :handler and, optionally, :action. Registered after
+	 * every other route, when router() is called.
+	 */
+	function addConventionRoute( path ) {
+		_assertOpen( path )
+		if ( !reFindNoCase( ":handler(/|$)", path ) ) {
+			throw( type = "BoxExpressMvc.InvalidRoute", message = "Route #path#: end() is for a convention route with a :handler segment. Use to() or toHandler() for anything else" )
+		}
+		variables.conventionPaths.append( path )
+		return this
+	}
+
+	/**
+	 * What the route DSL compiles to. target is "handler.action" (or
+	 * "handler", meaning its index action) or a plain ( req, res, next )
+	 * function.
+	 */
+	function addRoute( methods, path, target, name = "" ) {
+		_assertOpen( path )
+		var handlerFn = target
+		var isEvent = isSimpleValue( target )
+
+		if ( isEvent ) {
+			var eventName = _parseEvent( target )
+			var entry = variables.handlers[ eventName.handler ] ?: ""
+			if ( isSimpleValue( entry ) ) {
+				throw( type = "BoxExpressMvc.UnknownHandler", message = "Route #path# points at handler [#eventName.handler#], which is not in the handlers directory" )
+			}
+			if ( !entry.actions.keyExists( eventName.action ) ) {
+				throw( type = "BoxExpressMvc.UnknownAction", message = "Route #path# points at [#eventName.handler#.#eventName.action#], but handler [#eventName.handler#] has no public #eventName.action#() function" )
+			}
+			var action = entry.actions[ eventName.action ]
+			var mvc = this
+			handlerFn = ( req, res, next ) => mvc.runEvent( entry, action, req, res, next )
+
+			var eventKey = entry.name & "." & action
+			if ( !variables.eventRoutes.keyExists( eventKey ) ) {
+				variables.eventRoutes[ eventKey ] = path
+			}
+		}
+
+		for ( var method in listToArray( methods ) ) {
+			if ( !listFindNoCase( static.HTTP_METHODS, method ) ) {
+				throw( type = "BoxExpressMvc.InvalidRoute", message = "Route #path#: unknown HTTP method [#method#]" )
+			}
+			try {
+				invoke( variables.expressRouter, lCase( method ), [ path, handlerFn ] )
+			} catch ( any e ) {
+				throw( type = "BoxExpressMvc.InvalidRoute", message = "Route #path# cannot be registered: #e.message#" )
+			}
+		}
+
+		if ( len( name ) ) {
+			if ( variables.namedRoutes.keyExists( name ) ) {
+				throw( type = "BoxExpressMvc.InvalidRoute", message = "Route #path#: the name [#name#] is already used by #variables.namedRoutes[ name ]#" )
+			}
+			variables.namedRoutes[ name ] = path
+		}
+		return this
+	}
+
+	function runEvent( entry, action, req, res, next ) {
+		try {
+			var rc = _buildRc( req )
+			var prc = res.locals
+			var event = new Event( this, req, res, rc, entry.name, action )
+
+			if ( entry.hasPreHandler ) {
+				entry.instance.preHandler( event, rc, prc, action )
+			}
+			if ( res.isSent() ) {
+				return
+			}
+
+			invoke( entry.instance, action, [ event, rc, prc ] )
+
+			if ( entry.hasPostHandler ) {
+				entry.instance.postHandler( event, rc, prc, action )
+			}
+			if ( res.isSent() ) {
+				return
+			}
+			if ( event.isNoRender() ) {
+				return res.end()
+			}
+			_render( event, rc, prc, res )
+		} catch ( any e ) {
+			next( e )
+		}
+	}
+
+	/**
+	 * The path of a named route or of the first route registered for a
+	 * "handler.action". params fill :name placeholders; the rest become
+	 * the query string.
+	 */
+	function linkTo( to, params = {} ) {
+		var path = variables.namedRoutes[ to ] ?: ""
+		if ( !len( path ) ) {
+			var eventName = _parseEvent( to )
+			path = variables.eventRoutes[ eventName.handler & "." & eventName.action ] ?: ""
+		}
+		var linkParams = params
+		if ( !len( path ) && variables.conventionPaths.len() && variables.handlers.keyExists( eventName.handler ) ) {
+			path = variables.conventionPaths[ 1 ]
+			linkParams = { handler: eventName.handler, action: eventName.action }
+			linkParams.append( params )
+		}
+		if ( !len( path ) ) {
+			throw( type = "BoxExpressMvc.UnknownRoute", message = "No route is named [#to#] and no route points at it as a handler.action" )
+		}
+
+		var encoder = createObject( "java", "java.net.URLEncoder" )
+		var query = []
+		for ( var key in linkParams ) {
+			var placeholder = ":#key#(\([^)]*\))?\??(?![A-Za-z0-9_])"
+			var value = toString( linkParams[ key ] )
+			if ( reFindNoCase( placeholder, path ) ) {
+				var segment = encoder.encode( value, "UTF-8" ).replace( "+", "%20" )
+				path = createObject( "java", "java.util.regex.Pattern" )
+					.compile( placeholder, 2 )
+					.matcher( path )
+					.replaceFirst( createObject( "java", "java.util.regex.Matcher" ).quoteReplacement( segment ) )
+			} else {
+				query.append( encoder.encode( key, "UTF-8" ) & "=" & encoder.encode( value, "UTF-8" ) )
+			}
+		}
+
+		path = reReplace( path, "/:[A-Za-z0-9_]+(\([^)]*\))?\?$", "" )
+		path = reReplace( path, "/\*[A-Za-z0-9_]*$", "" )
+		if ( find( ":", path ) ) {
+			throw( type = "BoxExpressMvc.MissingRouteParam", message = "buildLink( ""#to#"" ) is missing a value for a placeholder in #path#" )
+		}
+		if ( !len( path ) ) {
+			path = "/"
+		}
+		return query.len() ? path & "?" & query.toList( "&" ) : path
+	}
+
+	private function _render( event, rc, prc, res ) {
+		if ( !len( variables.viewsRoot ) ) {
+			throw( type = "BoxExpressMvc.NoViews", message = "[#event.getCurrentEvent()#] sent no response and there is no views directory to render from" )
+		}
+		var layoutName = ""
+		if ( event.usesLayout() ) {
+			layoutName = len( event.getLayoutName() ) ? event.getLayoutName() : variables.defaultLayout
+		}
+		var html = new ViewContext( variables.viewsRoot, variables.layoutsRoot, event, rc, prc ).render( event.getView(), layoutName )
+		res.type( "text/html; charset=utf-8" ).send( html )
+	}
+
+	function _registerConventionRoute( path ) {
+		var mvc = this
+		var handlers = variables.handlers
+		try {
+			variables.expressRouter.all( path, ( req, res, next ) => {
+				var entry = handlers[ req.params.handler ] ?: ""
+				var action = req.params.action ?: "index"
+				if ( isSimpleValue( entry ) || !entry.actions.keyExists( action ) ) {
+					return next()
+				}
+				mvc.runEvent( entry, entry.actions[ action ], req, res, next )
+			} )
+		} catch ( any e ) {
+			throw( type = "BoxExpressMvc.InvalidRoute", message = "Route #path# cannot be registered: #e.message#" )
+		}
+	}
+
+	private function _assertOpen( path ) {
+		if ( variables.finalized ) {
+			throw( type = "BoxExpressMvc.RoutesFrozen", message = "Route #path# was added after router() was called. Register every route first" )
+		}
+	}
+
+	private function _configureViews( config ) {
+		variables.viewsRoot = _templateRoot( config.views ?: "", "views" )
+		variables.layoutsRoot = _templateRoot( config.layouts ?: "", "layouts" )
+		variables.defaultLayout = config.defaultLayout ?: ""
+
+		if ( len( variables.layoutsRoot ) && !len( variables.viewsRoot ) ) {
+			throw( type = "BoxExpressMvc.InvalidConfig", message = "boxExpressMvc() has layouts but no views directory" )
+		}
+		if ( len( variables.defaultLayout ) ) {
+			if ( !fileExists( variables.layoutsRoot & "/" & variables.defaultLayout & ".bxm" ) ) {
+				throw( type = "BoxExpressMvc.InvalidConfig", message = "defaultLayout [#variables.defaultLayout#] is not a .bxm file in the layouts directory" )
+			}
+		} else if ( len( variables.layoutsRoot ) && fileExists( variables.layoutsRoot & "/Main.bxm" ) ) {
+			variables.defaultLayout = "Main"
+		}
+	}
+
+	private function _templateRoot( dir, label ) {
+		if ( !len( dir ) ) {
+			return ""
+		}
+		if ( !directoryExists( dir ) ) {
+			throw( type = "BoxExpressMvc.InvalidConfig", message = "boxExpressMvc() #label#: #dir# is not a directory" )
+		}
+		var root = createObject( "java", "java.io.File" ).init( dir ).toPath().toRealPath( [] ).toString()
+		// include only resolves an absolute path that a mapping covers.
+		getBoxRuntime().getConfiguration().registerMapping( root, root )
+		getBoxContext().clearConfigCache()
+		return root
+	}
+
+	/**
+	 * services: a handler property named after a key gets that value.
+	 * injector: a WireBox injector (anything with autowire()) wires
+	 * inject="..." properties. Both run once, here, before any request.
+	 */
+	private function _injectHandlers( config ) {
+		var services = config.services ?: {}
+		for ( var name in variables.handlers ) {
+			var instance = variables.handlers[ name ].instance
+			var matched = {}
+			for ( var prop in getMetadata( instance ).properties ) {
+				if ( services.keyExists( prop.name ) ) {
+					matched[ prop.name ] = services[ prop.name ]
+				}
+			}
+			if ( !matched.isEmpty() ) {
+				instance.$bxmvcMix = variables.$bxmvcMix
+				instance.$bxmvcMix( matched )
+				structDelete( instance, "$bxmvcMix" )
+			}
+			if ( config.keyExists( "injector" ) ) {
+				config.injector.autowire( target = instance, targetID = "handler:" & name )
+			}
+		}
+	}
+
+	private function _loadRoutes( file ) {
+		if ( !fileExists( file ) || lCase( file.right( 3 ) ) != ".bx" ) {
+			throw( type = "BoxExpressMvc.InvalidConfig", message = "boxExpressMvc() routes: #file# is not a .bx file" )
+		}
+		var fileObj = createObject( "java", "java.io.File" ).init( file ).getCanonicalFile()
+		var mapping = "bxmvc_" & lCase( hash( fileObj.getParent() ) ).mid( 1, 12 )
+		getBoxRuntime().getConfiguration().registerMapping( "/" & mapping, fileObj.getParent() )
+		getBoxContext().clearConfigCache()
+
+		var className = fileObj.getName().mid( 1, fileObj.getName().len() - 3 )
+		var routesFile = new "#mapping#.#className#"()
+		if ( !structKeyExists( routesFile, "configure" ) ) {
+			throw( type = "BoxExpressMvc.InvalidConfig", message = "#file# needs a configure() function" )
+		}
+
+		var mvc = this
+		routesFile.$bxmvcMix = variables.$bxmvcMix
+		routesFile.$bxmvcMix( {
+			route: function( path, target = "", name = "" ) { return mvc.route( path, target, name ) },
+			resources: function( name ) { return mvc.resources( name ) }
+		} )
+		structDelete( routesFile, "$bxmvcMix" )
+		routesFile.configure()
+	}
+
+	/**
+	 * Copied onto another instance and called there, so `variables` is
+	 * that instance's.
+	 */
+	function $bxmvcMix( members ) {
+		variables.append( members )
+	}
+
+	private function _buildRc( req ) {
+		var rc = {}
+		rc.append( req.query )
+		if ( isStruct( req.body ) && !isObject( req.body ) ) {
+			rc.append( req.body )
+		}
+		rc.append( req.params )
+		return rc
+	}
+
+	private function _parseEvent( eventName ) {
+		var parts = listToArray( eventName, "." )
+		if ( parts.len() < 2 ) {
+			return { handler: eventName, action: "index" }
+		}
+		var action = parts.last()
+		parts.deleteAt( parts.len() )
+		return { handler: parts.toList( "." ), action: action }
+	}
+
+	private function _loadHandlers( dir ) {
+		var root = createObject( "java", "java.io.File" ).init( dir ).getCanonicalPath()
+		var mapping = "bxmvc_" & lCase( hash( root ) ).mid( 1, 12 )
+
+		// A class can only be created from a mapped path, and a context
+		// that has already read its config won't see a new mapping until
+		// its cache is cleared.
+		getBoxRuntime().getConfiguration().registerMapping( "/" & mapping, root )
+		getBoxContext().clearConfigCache()
+
+		for ( var file in directoryList( root, true, "path", "*.bx" ).sort( "textnocase" ) ) {
+			var name = file.mid( root.len() + 2, file.len() - root.len() - 4 ).reReplace( "[/\\]", ".", "all" )
+			var instance = new "#mapping#.#name#"()
+			// Keyed case-insensitively; the value is the name as declared,
+			// which is what an implicit view's file is named after.
+			var actions = {}
+			var md = getMetadata( instance )
+			while ( true ) {
+				for ( var fn in md.functions ?: [] ) {
+					if ( ( fn.access ?: "public" ) == "public" && !listFindNoCase( static.RESERVED_ACTIONS, fn.name ) && !actions.keyExists( fn.name ) ) {
+						actions[ fn.name ] = fn.name
+					}
+				}
+				if ( !isStruct( md.extends ?: "" ) || md.extends.isEmpty() ) {
+					break
+				}
+				md = md.extends
+			}
+			variables.handlers[ name ] = {
+				name: name,
+				instance: instance,
+				actions: actions,
+				hasPreHandler: structKeyExists( instance, "preHandler" ),
+				hasPostHandler: structKeyExists( instance, "postHandler" )
+			}
+		}
+	}
+
+}

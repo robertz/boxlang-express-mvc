@@ -1,0 +1,159 @@
+/**
+ * One per request. Wraps req and res with the ColdBox request-context
+ * method names.
+ */
+class {
+
+	static {
+		CONTENT_TYPES = {
+			json: "application/json; charset=utf-8",
+			html: "text/html; charset=utf-8",
+			text: "text/plain; charset=utf-8",
+			xml: "application/xml; charset=utf-8"
+		}
+	}
+
+	function init( mvc, req, res, rc, handlerName, actionName ) {
+		variables.mvc = mvc
+		variables.req = req
+		variables.res = res
+		variables.rc = rc
+		variables.handlerName = handlerName
+		variables.actionName = actionName
+		variables.view = ""
+		variables.layout = ""
+		variables.useLayout = true
+		variables.skipRender = false
+		return this
+	}
+
+	function getRequest() {
+		return variables.req
+	}
+
+	function getResponse() {
+		return variables.res
+	}
+
+	function getCollection() {
+		return variables.rc
+	}
+
+	function getPrivateCollection() {
+		return variables.res.locals
+	}
+
+	function getValue( name, defaultValue = "" ) {
+		return variables.rc[ name ] ?: defaultValue
+	}
+
+	function setValue( name, value ) {
+		variables.rc[ name ] = value
+		return this
+	}
+
+	function valueExists( name ) {
+		return variables.rc.keyExists( name )
+	}
+
+	function getCurrentHandler() {
+		return variables.handlerName
+	}
+
+	function getCurrentAction() {
+		return variables.actionName
+	}
+
+	function getCurrentEvent() {
+		return variables.handlerName & "." & variables.actionName
+	}
+
+	function getHTTPMethod() {
+		return variables.req.method
+	}
+
+	function getHTTPHeader( name, defaultValue = "" ) {
+		return variables.req.get( name ) ?: defaultValue
+	}
+
+	function setHTTPHeader( name, value ) {
+		variables.res.set( name, value )
+		return this
+	}
+
+	function setStatusCode( code ) {
+		variables.res.status( code )
+		return this
+	}
+
+	function setView( view, layout = "" ) {
+		variables.view = view
+		if ( len( layout ) ) {
+			setLayout( layout )
+		}
+		return this
+	}
+
+	function setLayout( name ) {
+		variables.layout = name
+		variables.useLayout = true
+		return this
+	}
+
+	function noLayout() {
+		variables.useLayout = false
+		return this
+	}
+
+	function noRender() {
+		variables.skipRender = true
+		return this
+	}
+
+	function isNoRender() {
+		return variables.skipRender
+	}
+
+	function getView() {
+		return len( variables.view ) ? variables.view : variables.handlerName.replace( ".", "/", "all" ) & "/" & variables.actionName
+	}
+
+	function usesLayout() {
+		return variables.useLayout
+	}
+
+	function getLayoutName() {
+		return variables.layout
+	}
+
+	/**
+	 * Sends the response now. json takes a plain struct or array (a class
+	 * instance serializes as {}); the other types take a string.
+	 */
+	function renderData( type = "json", data = "", statusCode = 200, contentType = "" ) {
+		if ( !static.CONTENT_TYPES.keyExists( type ) ) {
+			throw( type = "BoxExpressMvc.InvalidRenderType", message = "renderData() type must be json, html, text or xml, not [#type#]" )
+		}
+		variables.res.status( statusCode ).type( len( contentType ) ? contentType : static.CONTENT_TYPES[ type ] )
+		variables.res.send( type == "json" ? jsonSerialize( data ) : data )
+		return this
+	}
+
+	/**
+	 * to is a URL (starts with "/" or has a scheme), a route name, or a
+	 * "handler.action".
+	 */
+	function relocate( to, queryString = "", statusCode = 302 ) {
+		var target = ( to.left( 1 ) == "/" || find( "://", to ) ) ? to : buildLink( to )
+		if ( len( queryString ) ) {
+			target &= ( find( "?", target ) ? "&" : "?" ) & queryString
+		}
+		variables.res.redirect( target, statusCode )
+		return this
+	}
+
+	function buildLink( to, params = {} ) {
+		return variables.req.baseUrl & variables.mvc.linkTo( to, params )
+	}
+
+}

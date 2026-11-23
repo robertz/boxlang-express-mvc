@@ -1,0 +1,63 @@
+/**
+ * One per render. A view or layout runs inside _run(), so it sees that
+ * function's arguments (event, rc, prc, args) and can call view().
+ */
+class {
+
+	function init( viewsRoot, layoutsRoot, event, rc, prc ) {
+		variables.viewsRoot = viewsRoot
+		variables.layoutsRoot = layoutsRoot
+		variables.event = event
+		variables.rc = rc
+		variables.prc = prc
+		variables.body = ""
+		return this
+	}
+
+	function render( viewName, layoutName ) {
+		variables.body = _run( variables.viewsRoot, viewName, variables.event, variables.rc, variables.prc, {} )
+		if ( !len( layoutName ) ) {
+			return variables.body
+		}
+		if ( !len( variables.layoutsRoot ) ) {
+			throw( type = "BoxExpressMvc.NoLayouts", message = "Layout [#layoutName#] was asked for but boxExpressMvc() has no layouts directory" )
+		}
+		return _run( variables.layoutsRoot, layoutName, variables.event, variables.rc, variables.prc, {} )
+	}
+
+	/**
+	 * In a layout, view() is the rendered view. Anywhere, view( name, args )
+	 * renders another view inline; it reads what it was passed as args.
+	 */
+	function view( name = "", args = {} ) {
+		if ( !len( name ) ) {
+			return variables.body
+		}
+		return _run( variables.viewsRoot, name, variables.event, variables.rc, variables.prc, args )
+	}
+
+	private function _run( __root, __name, event, rc, prc, args ) {
+		var __path = _resolve( __root, __name )
+		var __output = ""
+		bx:savecontent variable="__output" {
+			include "#__path#"
+		}
+		return __output
+	}
+
+	private function _resolve( root, name ) {
+		var rootPath = createObject( "java", "java.nio.file.Paths" ).get( root, [] )
+		var file = lCase( name.right( 4 ) ) == ".bxm" ? name : name & ".bxm"
+		var real = ""
+		try {
+			real = rootPath.resolve( file ).normalize().toRealPath( [] )
+		} catch ( any e ) {
+			throw( type = "BoxExpressMvc.ViewNotFound", message = "View not found: #name# (looked in #root#)" )
+		}
+		if ( !real.startsWith( rootPath ) ) {
+			throw( type = "BoxExpressMvc.InvalidViewPath", message = "Invalid view path: #name#" )
+		}
+		return real.toString()
+	}
+
+}

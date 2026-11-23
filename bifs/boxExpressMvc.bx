@@ -1,0 +1,12 @@
+/**
+ *   mvc = boxExpressMvc( { handlers: expandPath( "./handlers" ), views: expandPath( "./views" ) } )
+ *   app.use( mvc.router() )
+ */
+@BoxBIF
+class {
+
+	function invoke( config = {} ) {
+		return new bxModules.boxexpressmvc.models.Mvc( config )
+	}
+
+}

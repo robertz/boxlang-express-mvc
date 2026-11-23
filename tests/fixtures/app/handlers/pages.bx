@@ -1,0 +1,55 @@
+class {
+
+	function index( event, rc, prc ) {
+		prc.title = "Home <b>"
+		prc.items = [ "one", "<two>" ]
+	}
+
+	function about( event, rc, prc ) {
+		prc.title = "About"
+		event.setView( "pages/index" )
+		prc.items = []
+	}
+
+	function bare( event, rc, prc ) {
+		prc.title = "Bare"
+		prc.items = []
+		event.setView( "pages/index" ).noLayout()
+	}
+
+	function alt( event, rc, prc ) {
+		prc.title = "Alt"
+		prc.items = []
+		event.setView( "pages/index" ).setLayout( "Alt" )
+	}
+
+	function both( event, rc, prc ) {
+		prc.title = "Both"
+		prc.items = []
+		event.setView( "pages/index", "Alt" )
+	}
+
+	function teapot( event, rc, prc ) {
+		prc.title = "Teapot"
+		prc.items = []
+		event.setStatusCode( 418 ).setView( "pages/index" )
+	}
+
+	function withPartial( event, rc, prc ) {
+		prc.title = "Partial"
+	}
+
+	function missing( event, rc, prc ) {
+	}
+
+	function escapeDir( event, rc, prc ) {
+		event.setView( "../layouts/Main" )
+	}
+
+	function ghostLayout( event, rc, prc ) {
+		prc.title = "x"
+		prc.items = []
+		event.setView( "pages/index" ).setLayout( "Ghost" )
+	}
+
+}

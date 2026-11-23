@@ -1,0 +1,65 @@
+<bx:output>
+<div class="hero text-center py-5">
+	<h1 class="display-5">#encodeForHTML( prc.welcomeMessage )#</h1>
+	<p class="lead">You are now running <strong>#encodeForHTML( event.getCurrentEvent() )#</strong></p>
+</div>
+
+<div class="container my-4">
+	<div class="row">
+		<div class="col-md-8">
+			<section class="mb-4">
+				<h2 class="h4">Registered Event Handlers</h2>
+				<p>
+					Every public function of a class in <code>handlers/</code> is an action.
+					The convention route in <code>config/Router.bx</code> serves each one at
+					<code>/handler/action</code>.
+				</p>
+				<ul>
+				<bx:loop collection="#prc.registeredHandlers#" item="handlerName">
+					<li>
+						<strong>#encodeForHTML( handlerName )#</strong>
+						<ul>
+						<bx:loop array="#prc.registeredHandlers[ handlerName ]#" item="actionName">
+							<li><a href="#event.buildLink( handlerName & "." & actionName )#">#encodeForHTML( handlerName & "." & actionName )#</a></li>
+						</bx:loop>
+						</ul>
+					</li>
+				</bx:loop>
+				</ul>
+			</section>
+
+			<section class="mb-4">
+				<h2 class="h4">Other Routes</h2>
+				<ul>
+					<li><a href="/healthcheck">/healthcheck</a>, a plain BoxExpress function</li>
+					<li><a href="/api/echo">/api/echo</a>, a JSON response</li>
+				</ul>
+			</section>
+
+			<section>
+				<h2 class="h4">Where things are</h2>
+				<ul>
+					<li><code>server.bxs</code>: settings, middleware, error handling</li>
+					<li><code>config/Router.bx</code>: routes</li>
+					<li><code>handlers/</code>: event handlers</li>
+					<li><code>views/</code> and <code>layouts/</code>: <code>.bxm</code> templates</li>
+					<li><code>models/</code>: your services</li>
+					<li><code>includes/</code>: static files, served at <code>/includes</code></li>
+				</ul>
+			</section>
+		</div>
+
+		<div class="col-md-4">
+			<div class="card mb-3">
+				<div class="card-header">Documentation</div>
+				<div class="list-group list-group-flush">
+					<a class="list-group-item list-group-item-action" href="https://github.com/robertz/boxlang-express-mvc##readme">Getting started</a>
+					<a class="list-group-item list-group-item-action" href="https://github.com/robertz/boxlang-express-mvc/blob/main/docs/coming-from-coldbox.md">Coming from ColdBox</a>
+					<a class="list-group-item list-group-item-action" href="https://github.com/robertz/boxlang-express/tree/main/docs">BoxExpress reference</a>
+					<a class="list-group-item list-group-item-action" href="https://boxlang.ortusbooks.com">BoxLang documentation</a>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+</bx:output>

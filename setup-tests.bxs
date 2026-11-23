@@ -1,0 +1,33 @@
+/**
+ * One-time setup for the test suite: links this checkout and a BoxExpress
+ * checkout into boxlang_modules/, and TestBox into testbox/. Modules are
+ * discovered at process start, so this can't be part of run-tests.bxs.
+ *
+ *   boxlang setup-tests.bxs [path to a boxlang-express checkout, default ../boxlang-express]
+ */
+files = createObject( "java", "java.nio.file.Files" )
+paths = createObject( "java", "java.nio.file.Paths" )
+args = cliGetArgs().positionals
+express = createObject( "java", "java.io.File" ).init( expandPath( args.len() > 1 ? args[ 2 ] : "../boxlang-express" ) ).getCanonicalPath()
+
+if ( !fileExists( express & "/ModuleConfig.bx" ) ) {
+	println( "No BoxExpress checkout at #express#. Pass its path as the first argument." )
+	createObject( "java", "java.lang.System" ).exit( 1 )
+}
+
+files.createDirectories( paths.get( expandPath( "boxlang_modules" ) ) )
+files.createDirectories( paths.get( expandPath( "examples/boxlang_modules" ) ) )
+links = [
+	"boxlang_modules/boxexpressmvc": "..",
+	"boxlang_modules/boxexpress": express,
+	"testbox": express & "/testbox",
+	"examples/boxlang_modules/boxexpressmvc": "../..",
+	"examples/boxlang_modules/boxexpress": express
+]
+for ( link in links ) {
+	if ( !files.exists( paths.get( expandPath( link ) ), [] ) ) {
+		files.createSymbolicLink( paths.get( expandPath( link ) ), paths.get( links[ link ] ) )
+		println( "Linked #link# -> #links[ link ]#" )
+	}
+}
+println( "Ready. Run `boxlang run-tests.bxs`." )

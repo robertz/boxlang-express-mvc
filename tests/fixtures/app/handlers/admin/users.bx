@@ -1,0 +1,11 @@
+class {
+
+	function index( event, rc, prc ) {
+		event.renderData( data = { event: event.getCurrentEvent() } )
+	}
+
+	function list( event, rc, prc ) {
+		event.setView( "admin/users/index" )
+	}
+
+}

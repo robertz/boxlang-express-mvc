@@ -1,0 +1,17 @@
+class {
+
+	function preHandler( event, rc, prc, action ) {
+		prc.trail = [ "pre:" & action ]
+	}
+
+	function index( event, rc, prc ) {
+		prc.trail.append( "action" )
+		event.noRender()
+	}
+
+	function postHandler( event, rc, prc, action ) {
+		prc.trail.append( "post:" & action )
+		event.setHTTPHeader( "X-Trail", prc.trail.toList() )
+	}
+
+}

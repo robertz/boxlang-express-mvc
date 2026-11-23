@@ -1,0 +1,1 @@
+<bx:output>admin users for #encodeForHTML( event.getCurrentHandler() )#</bx:output>

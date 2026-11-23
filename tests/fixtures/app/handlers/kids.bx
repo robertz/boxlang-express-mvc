@@ -1,0 +1,7 @@
+class extends="tests.fixtures.app.lib.BaseHandler" {
+
+	function own( event, rc, prc ) {
+		event.renderData( data = { action: "own", pre: prc.pre } )
+	}
+
+}

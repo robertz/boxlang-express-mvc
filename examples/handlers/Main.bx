@@ -1,0 +1,25 @@
+/**
+ * One instance serves every request, so keep request data in rc, prc
+ * and local variables, never in the variables scope.
+ */
+class {
+
+	function index( event, rc, prc ) {
+		prc.welcomeMessage = "Welcome to boxlang-express-mvc!"
+		event.setView( "main/index" )
+	}
+
+	function data( event, rc, prc ) {
+		event.renderData( type = "json", data = [
+			{ id: createUUID(), name: "Luis" },
+			{ id: createUUID(), name: "Joe" },
+			{ id: createUUID(), name: "Bob" },
+			{ id: createUUID(), name: "Darth" }
+		] )
+	}
+
+	function relocation( event, rc, prc ) {
+		event.relocate( "main.index" )
+	}
+
+}

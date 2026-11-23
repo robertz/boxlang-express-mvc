@@ -1,0 +1,47 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _app( config ) {
+		var settings = { handlers: expandPath( "tests/fixtures/di/handlers" ) }
+		settings.append( config )
+		var mvc = boxExpressMvc( settings )
+		mvc.route( "/catalog" ).to( "catalog.index" )
+		var app = boxExpress()
+		app.use( mvc.router() )
+		app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type, message: err.message } ) )
+		return app
+	}
+
+	function run() {
+
+		describe( "services", function() {
+
+			it( "fills handler properties named after a key, and leaves the rest alone", function() {
+				var app = _app( { services: { itemService: new tests.fixtures.di.models.ItemService(), unused: 1 } } )
+				expect( app.inject( "/catalog" ).json() ).toBe( { items: [ "anvil", "rope" ], mailer: "unset" } )
+			} )
+
+		} )
+
+		describe( "injector", function() {
+
+			it( "is asked to autowire each handler once, at startup", function() {
+				var calls = []
+				var fake = { autowire: ( target, targetID ) => calls.append( targetID ) }
+				var app = _app( { injector: fake, services: { itemService: new tests.fixtures.di.models.ItemService() } } )
+				app.inject( "/catalog" )
+				app.inject( "/catalog" )
+				expect( calls ).toBe( [ "handler:catalog" ] )
+			} )
+
+			it( title = "wires inject= properties with a real WireBox injector", skip = !directoryExists( expandPath( "wirebox" ) ), body = function() {
+				var injector = new wirebox.system.ioc.Injector()
+				injector.getBinder().mapDirectory( packagePath = "tests.fixtures.di.models" )
+				var app = _app( { injector: injector } )
+				expect( app.inject( "/catalog" ).json().items ).toBe( [ "anvil", "rope" ] )
+			} )
+
+		} )
+
+	}
+
+}

@@ -1,0 +1,13 @@
+class {
+
+	function configure() {
+		route( "/items/:id" ).as( "itemDetail" ).to( "items.show" )
+		route( "/login" ).as( "login" ).withAction( { GET: "form", POST: "doLogin" } ).toHandler( "auth" )
+		route( "/links", "auth.links" )
+		resources( "photos" )
+		route( "/health", ( req, res ) => res.send( "ok" ) )
+		route( "/:handler/:action?" ).end()
+		route( "/after", ( req, res ) => res.send( "explicit routes still win over the convention route" ) )
+	}
+
+}

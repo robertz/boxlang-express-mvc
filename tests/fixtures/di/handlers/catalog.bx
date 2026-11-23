@@ -1,0 +1,10 @@
+class {
+
+	property name="itemService" inject="ItemService";
+	property name="mailer";
+
+	function index( event, rc, prc ) {
+		event.renderData( data = { items: itemService.list(), mailer: isNull( variables.mailer ) ? "unset" : "set" } )
+	}
+
+}

@@ -1,0 +1,59 @@
+/**
+ * What route( path ) returns. Nothing is registered until to(),
+ * toHandler() or end() is called.
+ */
+class {
+
+	function init( mvc, path ) {
+		variables.mvc = mvc
+		variables.path = path
+		variables.name = ""
+		variables.actions = {}
+		variables.done = false
+		return this
+	}
+
+	function as( name ) {
+		variables.name = name
+		return this
+	}
+
+	function withAction( actions ) {
+		variables.actions = actions
+		return this
+	}
+
+	function to( eventName ) {
+		variables.done = true
+		variables.mvc.addRoute( "ALL", variables.path, eventName, variables.name )
+		return this
+	}
+
+	function toHandler( handlerName ) {
+		if ( variables.actions.isEmpty() ) {
+			return to( handlerName )
+		}
+		variables.done = true
+		var routeName = variables.name
+		for ( var method in variables.actions ) {
+			variables.mvc.addRoute( method, variables.path, handlerName & "." & variables.actions[ method ], routeName )
+			routeName = ""
+		}
+		return this
+	}
+
+	function end() {
+		variables.done = true
+		variables.mvc.addConventionRoute( variables.path )
+		return this
+	}
+
+	function isDone() {
+		return variables.done
+	}
+
+	function getPath() {
+		return variables.path
+	}
+
+}

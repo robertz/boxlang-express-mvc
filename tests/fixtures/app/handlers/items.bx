@@ -1,0 +1,95 @@
+class {
+
+	function index( event, rc, prc ) {
+		event.renderData( data = {
+			event: event.getCurrentEvent(),
+			handler: event.getCurrentHandler(),
+			action: event.getCurrentAction()
+		} )
+	}
+
+	function show( event, rc, prc ) {
+		return event.renderData( type = "json", data = { id: rc.id, rc: rc } )
+	}
+
+	function page( event, rc, prc ) {
+		event.renderData( type = "html", data = "<p>#encodeForHTML( rc.name ?: "nobody" )#</p>", statusCode = 201 )
+	}
+
+	function plain( event, rc, prc ) {
+		event.renderData( type = "text", data = "plain text", statusCode = 202 )
+	}
+
+	function feed( event, rc, prc ) {
+		event.renderData( type = "xml", data = "<feed/>" )
+	}
+
+	function custom( event, rc, prc ) {
+		event.renderData( type = "text", data = "a,b", contentType = "text/csv" )
+	}
+
+	function badType( event, rc, prc ) {
+		event.renderData( type = "pdf", data = "x" )
+	}
+
+	function toEvent( event, rc, prc ) {
+		event.relocate( "items.index", "from=toEvent" )
+	}
+
+	function toLink( event, rc, prc ) {
+		event.relocate( event.buildLink( "itemDetail", { id: 7, tab: "specs & more" } ) )
+	}
+
+	function toUrl( event, rc, prc ) {
+		event.relocate( "https://example.com/x", "", 301 )
+	}
+
+	function silent( event, rc, prc ) {
+		event.setStatusCode( 204 ).noRender()
+	}
+
+	function boom( event, rc, prc ) {
+		throw( type = "Items.Boom", message = "boom" )
+	}
+
+	function headers( event, rc, prc ) {
+		event.setHTTPHeader( "X-Out", event.getHTTPHeader( "X-In", "none" ) )
+		event.renderData( data = { method: event.getHTTPMethod(), missing: event.getHTTPHeader( "X-Nope", "dflt" ) } )
+	}
+
+	function values( event, rc, prc ) {
+		event.setValue( "added", "yes" )
+		prc.fromAction = "p"
+		event.renderData( data = {
+			exists: event.valueExists( "id" ),
+			missing: event.valueExists( "nope" ),
+			fallback: event.getValue( "nope", "d" ),
+			id: event.getValue( "id" ),
+			added: rc.added,
+			collectionHasAdded: event.getCollection().keyExists( "added" ),
+			prc: event.getPrivateCollection().fromAction
+		} )
+	}
+
+	function escape( event, rc, prc ) {
+		event.getResponse().send( "raw:" & event.getRequest().path )
+	}
+
+	function slow( event, rc, prc ) {
+		prc.n = rc.n
+		sleep( randRange( 1, 25 ) )
+		event.renderData( data = { rc: rc.n, prc: prc.n, value: event.getValue( "n" ) } )
+	}
+
+	function fromMiddleware( event, rc, prc ) {
+		event.renderData( data = { pre: prc.pre } )
+	}
+
+	function nothing( event, rc, prc ) {
+	}
+
+	private function hidden( event, rc, prc ) {
+		event.renderData( data = { hidden: true } )
+	}
+
+}

@@ -1,0 +1,15 @@
+/**
+ * boxlang run-tests.bxs   (after a one-time boxlang setup-tests.bxs)
+ */
+if ( !directoryExists( expandPath( "boxlang_modules/boxexpressmvc" ) ) || !directoryExists( expandPath( "boxlang_modules/boxexpress" ) ) ) {
+	println( "Run `boxlang setup-tests.bxs` first." )
+	createObject( "java", "java.lang.System" ).exit( 1 )
+}
+
+tb = new "testbox.system.TestBox"( directory = "tests.specs", reporter = "text" )
+println( tb.run() )
+
+result = tb.getResult()
+if ( result.getTotalFail() > 0 || result.getTotalError() > 0 ) {
+	createObject( "java", "java.lang.System" ).exit( 1 )
+}

@@ -1,0 +1,28 @@
+class {
+
+	property name="moduleRecord";
+	property name="boxRuntime";
+	property name="log";
+
+	this.version = "0.1.0";
+	this.mapping = "boxexpressmvc";
+	this.author = "Robert Zehnder";
+	this.description = "ColdBox-style handlers, routes, views and layouts for BoxExpress.";
+	this.webURL = "https://github.com/robertz/boxlang-express-mvc";
+	this.disabled = false;
+
+	function configure() {
+		settings = {};
+		objectMappings = {};
+		datasources = {};
+		interceptors = [];
+		customInterceptionPoints = [];
+	}
+
+	function onLoad() {
+	}
+
+	function onUnload() {
+	}
+
+}

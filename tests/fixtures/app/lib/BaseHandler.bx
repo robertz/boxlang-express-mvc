@@ -1,0 +1,11 @@
+class {
+
+	function preHandler( event, rc, prc, action ) {
+		prc.pre = true
+	}
+
+	function shared( event, rc, prc ) {
+		event.renderData( data = { action: "shared", pre: prc.pre } )
+	}
+
+}

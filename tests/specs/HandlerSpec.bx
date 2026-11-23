@@ -1,0 +1,304 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _mvc() {
+		return boxExpressMvc( { handlers: expandPath( "tests/fixtures/app/handlers" ) } )
+	}
+
+	private function _app( mvc, mountPath = "" ) {
+		var app = boxExpress()
+		app.use( boxExpressJSON(), boxExpressUrlencoded() )
+		if ( len( mountPath ) ) {
+			app.use( mountPath, mvc.router() )
+		} else {
+			app.use( mvc.router() )
+		}
+		app.use( ( err, req, res, next ) => res.status( 500 ).json( { handled: true, type: err.type, message: err.message } ) )
+		return app
+	}
+
+	private function _standardApp() {
+		var mvc = _mvc()
+		mvc.addRoute( "GET", "/items", "items.index" )
+		mvc.addRoute( "GET,POST", "/items/:id", "items.show", "itemDetail" )
+		for ( var action in [ "page", "plain", "feed", "custom", "badType", "toEvent", "toLink", "toUrl", "silent", "boom", "headers", "escape", "nothing" ] ) {
+			mvc.addRoute( "GET", "/do/#action#", "items.#action#" )
+		}
+		mvc.addRoute( "ALL", "/values/:id", "items.values" )
+		mvc.addRoute( "GET", "/slow/:n", "items.slow" )
+		mvc.addRoute( "GET", "/lifecycle", "lifecycle" )
+		mvc.addRoute( "GET", "/secret", "guarded.secret" )
+		mvc.addRoute( "GET", "/admin/users", "admin.users.index" )
+		mvc.addRoute( "GET", "/health", ( req, res ) => res.send( "ok" ) )
+		return _app( mvc )
+	}
+
+	private function _injectInThread( app, n, results ) {
+		var t = createObject( "java", "java.lang.Thread" ).init( createDynamicProxy(
+			new bxModules.boxexpress.models.ThreadRunnable( function() { results[ n ] = app.inject( "/slow/" & n & "?n=query" ).json() } ),
+			[ "java.lang.Runnable" ]
+		) )
+		t.start()
+		return t
+	}
+
+	function beforeAll() {
+		variables.app = _standardApp()
+	}
+
+	function run() {
+
+		describe( "boxExpressMvc()", function() {
+
+			it( "needs an existing handlers directory", function() {
+				expect( () => boxExpressMvc( {} ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+				expect( () => boxExpressMvc( { handlers: expandPath( "tests/fixtures/nope" ) } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+			} )
+
+			it( "lists handlers and their actions", function() {
+				var handlers = _mvc().getHandlers()
+				expect( handlers[ "admin.users" ] ).toBe( [ "index", "list" ] )
+				expect( handlers.lifecycle ).toBe( [ "index" ] )
+				expect( handlers.kids ).toBe( [ "own", "shared" ] )
+			} )
+
+			it( "rejects a setting it doesn't know", function() {
+				expect( () => boxExpressMvc( { handlers: expandPath( "tests/fixtures/app/handlers" ), handler: "typo" } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+			} )
+
+		} )
+
+		describe( "handlers", function() {
+
+			it( "runs an action with event, rc and prc", function() {
+				var res = variables.app.inject( "/items" )
+				expect( res.statusCode ).toBe( 200 )
+				expect( res.json() ).toBe( { event: "items.index", handler: "items", action: "index" } )
+			} )
+
+			it( "finds a handler in a nested folder by its dotted name", function() {
+				expect( variables.app.inject( "/admin/users" ).json().event ).toBe( "admin.users.index" )
+			} )
+
+			it( "defaults to the index action", function() {
+				expect( variables.app.inject( "/lifecycle" ).statusCode ).toBe( 200 )
+			} )
+
+			it( "runs an action inherited from a base class, with the base preHandler", function() {
+				var mvc = _mvc()
+				mvc.addRoute( "GET", "/own", "kids.own" )
+				mvc.addRoute( "GET", "/shared", "kids.shared" )
+				var app = _app( mvc )
+				expect( app.inject( "/own" ).json() ).toBe( { action: "own", pre: true } )
+				expect( app.inject( "/shared" ).json() ).toBe( { action: "shared", pre: true } )
+			} )
+
+			it( "sees what middleware put in res.locals as prc, and a method the README's override middleware set", function() {
+				var mvc = boxExpressMvc( { handlers: expandPath( "tests/fixtures/app/handlers" ) } )
+				mvc.resources( "photos" )
+				mvc.route( "/mw" ).to( "items.fromMiddleware" )
+				var app = boxExpress()
+				app.use( boxExpressUrlencoded() )
+				app.use( ( req, res, next ) => {
+					var override = req.body._method ?: ""
+					if ( req.method == "POST" && isSimpleValue( override ) && listFindNoCase( "PUT,PATCH,DELETE", override ) ) {
+						req.method = uCase( override )
+					}
+					next()
+				} )
+				app.use( ( req, res, next ) => { res.locals.pre = "from middleware"; next() } )
+				app.use( mvc.router() )
+
+				expect( app.inject( "/mw" ).json().pre ).toBe( "from middleware" )
+				expect( app.inject( { method: "POST", url: "/photos/4", form: { _method: "delete" } } ).json().action ).toBe( "delete" )
+			} )
+
+			it( "leaves plain-function routes alone", function() {
+				expect( variables.app.inject( "/health" ).body ).toBe( "ok" )
+			} )
+
+			it( "answers an unknown path with the app's 404", function() {
+				expect( variables.app.inject( "/nope" ).statusCode ).toBe( 404 )
+			} )
+
+			it( "hands a thrown error to the app's error handler", function() {
+				var res = variables.app.inject( "/do/boom" )
+				expect( res.statusCode ).toBe( 500 )
+				expect( res.json() ).toBe( { handled: true, type: "Items.Boom", message: "boom" } )
+			} )
+
+			it( "errors when an action sends nothing and there are no views", function() {
+				expect( variables.app.inject( "/do/nothing" ).json().type ).toBe( "BoxExpressMvc.NoViews" )
+			} )
+
+			it( "reaches req and res through the event", function() {
+				expect( variables.app.inject( "/do/escape" ).body ).toBe( "raw:/do/escape" )
+			} )
+
+		} )
+
+		describe( "rc", function() {
+
+			it( "merges query, then body, then route params", function() {
+				var res = variables.app.inject( {
+					method: "POST",
+					url: "/items/42?id=fromQuery&q=1&both=query",
+					body: { id: "fromBody", b: 2, both: "body" }
+				} )
+				var rc = res.json().rc
+				expect( rc.id ).toBe( "42" )
+				expect( rc.q ).toBe( "1" )
+				expect( rc.b ).toBe( 2 )
+				expect( rc.both ).toBe( "body" )
+			} )
+
+			it( "merges a urlencoded form body", function() {
+				var res = variables.app.inject( { method: "POST", url: "/items/9", form: { name: "ada" } } )
+				expect( res.json().rc.name ).toBe( "ada" )
+			} )
+
+			it( "is read and written through the event", function() {
+				var data = variables.app.inject( "/values/5" ).json()
+				expect( data ).toBe( { exists: true, missing: false, fallback: "d", id: "5", added: "yes", collectionHasAdded: true, prc: "p" } )
+			} )
+
+			it( "does not leak between concurrent requests", function() {
+				var results = createObject( "java", "java.util.concurrent.ConcurrentHashMap" ).init()
+				var threads = []
+				for ( var n = 1; n <= 60; n++ ) {
+					threads.append( _injectInThread( variables.app, n, results ) )
+				}
+				threads.each( ( t ) => t.join() )
+
+				expect( results.size() ).toBe( 60 )
+				for ( var n = 1; n <= 60; n++ ) {
+					expect( results[ n ] ).toBe( { rc: toString( n ), prc: toString( n ), value: toString( n ) } )
+				}
+			} )
+
+		} )
+
+		describe( "event.renderData()", function() {
+
+			it( "sends json", function() {
+				var res = variables.app.inject( "/items/3" )
+				expect( res.statusCode ).toBe( 200 )
+				expect( res.header( "Content-Type" ) ).toInclude( "application/json" )
+				expect( res.json().id ).toBe( "3" )
+			} )
+
+			it( "sends html with a status code", function() {
+				var res = variables.app.inject( "/do/page?name=<b>" )
+				expect( res.statusCode ).toBe( 201 )
+				expect( res.header( "Content-Type" ) ).toInclude( "text/html" )
+				expect( res.body ).toBe( "<p>&lt;b&gt;</p>" )
+			} )
+
+			it( "sends text with a status code", function() {
+				var res = variables.app.inject( "/do/plain" )
+				expect( res.statusCode ).toBe( 202 )
+				expect( res.header( "Content-Type" ) ).toInclude( "text/plain" )
+				expect( res.body ).toBe( "plain text" )
+			} )
+
+			it( "sends xml", function() {
+				var res = variables.app.inject( "/do/feed" )
+				expect( res.header( "Content-Type" ) ).toInclude( "application/xml" )
+				expect( res.body ).toBe( "<feed/>" )
+			} )
+
+			it( "takes a content type of its own", function() {
+				expect( variables.app.inject( "/do/custom" ).header( "Content-Type" ) ).toInclude( "text/csv" )
+			} )
+
+			it( "rejects an unknown type", function() {
+				expect( variables.app.inject( "/do/badType" ).json().type ).toBe( "BoxExpressMvc.InvalidRenderType" )
+			} )
+
+		} )
+
+		describe( "event helpers", function() {
+
+			it( "relocates to a handler.action with a query string", function() {
+				var res = variables.app.inject( "/do/toEvent" )
+				expect( res.statusCode ).toBe( 302 )
+				expect( res.header( "Location" ) ).toBe( "/items?from=toEvent" )
+			} )
+
+			it( "builds a link from a named route, filling params and encoding the rest", function() {
+				expect( variables.app.inject( "/do/toLink" ).header( "Location" ) ).toBe( "/items/7?tab=specs+%26+more" )
+			} )
+
+			it( "relocates to a URL with a status code", function() {
+				var res = variables.app.inject( "/do/toUrl" )
+				expect( res.statusCode ).toBe( 301 )
+				expect( res.header( "Location" ) ).toBe( "https://example.com/x" )
+			} )
+
+			it( "prefixes links with the mount path", function() {
+				var mvc = _mvc()
+				mvc.addRoute( "GET", "/items", "items.index" )
+				mvc.addRoute( "GET", "/go", "items.toEvent" )
+				expect( _app( mvc, "/shop" ).inject( "/shop/go" ).header( "Location" ) ).toBe( "/shop/items?from=toEvent" )
+			} )
+
+			it( "ends the response without a body after noRender()", function() {
+				var res = variables.app.inject( "/do/silent" )
+				expect( res.statusCode ).toBe( 204 )
+				expect( res.body ).toBe( "" )
+			} )
+
+			it( "reads and sets headers and the method", function() {
+				var res = variables.app.inject( { url: "/do/headers", headers: { "X-In": "ping" } } )
+				expect( res.header( "X-Out" ) ).toBe( "ping" )
+				expect( res.json() ).toBe( { method: "GET", missing: "dflt" } )
+			} )
+
+		} )
+
+		describe( "preHandler and postHandler", function() {
+
+			it( "run around the action, in order", function() {
+				expect( variables.app.inject( "/lifecycle" ).header( "X-Trail" ) ).toBe( "pre:index,action,post:index" )
+			} )
+
+			it( "skip the action and postHandler when preHandler responds", function() {
+				var res = variables.app.inject( "/secret" )
+				expect( res.statusCode ).toBe( 302 )
+				expect( res.header( "Location" ) ).toBe( "/login" )
+				expect( res.header( "X-Action-Ran" ) ).toBe( "" )
+			} )
+
+			it( "let the action run when preHandler doesn't respond", function() {
+				expect( variables.app.inject( "/secret?token=1" ).json().secret ).toBeTrue()
+			} )
+
+		} )
+
+		describe( "addRoute()", function() {
+
+			it( "throws at startup for a handler that doesn't exist", function() {
+				expect( () => _mvc().addRoute( "GET", "/x", "ghosts.index" ) ).toThrow( "BoxExpressMvc.UnknownHandler" )
+			} )
+
+			it( "throws at startup for a missing, private or reserved action", function() {
+				expect( () => _mvc().addRoute( "GET", "/x", "items.nope" ) ).toThrow( "BoxExpressMvc.UnknownAction" )
+				expect( () => _mvc().addRoute( "GET", "/x", "items.hidden" ) ).toThrow( "BoxExpressMvc.UnknownAction" )
+				expect( () => _mvc().addRoute( "GET", "/x", "lifecycle.preHandler" ) ).toThrow( "BoxExpressMvc.UnknownAction" )
+			} )
+
+			it( "throws at startup, naming the route, for a path BoxExpress can't match", function() {
+				expect( () => _mvc().addRoute( "GET", "/a/:id?/b", "items.index" ) ).toThrow( type = "BoxExpressMvc.InvalidRoute", regex = "/a/:id\?/b" )
+			} )
+
+			it( "throws for a duplicate route name or an unknown method", function() {
+				var mvc = _mvc()
+				mvc.addRoute( "GET", "/a", "items.index", "home" )
+				expect( () => mvc.addRoute( "GET", "/b", "items.index", "home" ) ).toThrow( "BoxExpressMvc.InvalidRoute" )
+				expect( () => mvc.addRoute( "FETCH", "/c", "items.index" ) ).toThrow( "BoxExpressMvc.InvalidRoute" )
+			} )
+
+		} )
+
+	}
+
+}

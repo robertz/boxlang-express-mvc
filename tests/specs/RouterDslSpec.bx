@@ -1,0 +1,169 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _fixture( path ) {
+		return expandPath( "tests/fixtures/app/" & path )
+	}
+
+	private function _mvc() {
+		return boxExpressMvc( { handlers: _fixture( "handlers" ) } )
+	}
+
+	private function _app( mvc ) {
+		var app = boxExpress()
+		app.use( boxExpressJSON() )
+		app.use( mvc.router() )
+		app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type, message: err.message } ) )
+		return app
+	}
+
+	function beforeAll() {
+		variables.app = _app( boxExpressMvc( { handlers: _fixture( "handlers" ), routes: _fixture( "config/Router.bx" ) } ) )
+	}
+
+	function run() {
+
+		describe( "config/Router.bx", function() {
+
+			it( "routes with to()", function() {
+				expect( variables.app.inject( "/items/12" ).json().id ).toBe( "12" )
+			} )
+
+			it( "routes a string target passed straight to route()", function() {
+				expect( variables.app.inject( "/links" ).statusCode ).toBe( 200 )
+			} )
+
+			it( "routes per method with withAction().toHandler()", function() {
+				expect( variables.app.inject( "/login" ).body ).toBe( "form" )
+				expect( variables.app.inject( { method: "POST", url: "/login" } ).body ).toBe( "doLogin" )
+				expect( variables.app.inject( { method: "DELETE", url: "/login" } ).statusCode ).toBe( 404 )
+			} )
+
+			it( "routes a plain function", function() {
+				expect( variables.app.inject( "/health" ).body ).toBe( "ok" )
+			} )
+
+			it( "needs a configure() function and a .bx file", function() {
+				expect( () => boxExpressMvc( { handlers: _fixture( "handlers" ), routes: _fixture( "handlers/items.bx" ) } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+				expect( () => boxExpressMvc( { handlers: _fixture( "handlers" ), routes: _fixture( "config/Nope.bx" ) } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+			} )
+
+		} )
+
+		describe( "resources()", function() {
+
+			it( "maps the seven RESTful actions", function() {
+				var expected = [
+					[ "GET", "/photos", "index", "" ],
+					[ "GET", "/photos/new", "new", "" ],
+					[ "POST", "/photos", "create", "" ],
+					[ "GET", "/photos/7", "show", "7" ],
+					[ "GET", "/photos/7/edit", "edit", "7" ],
+					[ "PUT", "/photos/7", "update", "7" ],
+					[ "PATCH", "/photos/7", "update", "7" ],
+					[ "DELETE", "/photos/7", "delete", "7" ]
+				]
+				for ( var row in expected ) {
+					var data = variables.app.inject( { method: row[ 1 ], url: row[ 2 ] } ).json()
+					expect( data ).withContext( row[ 1 ] & " " & row[ 2 ] ).toBe( { action: row[ 3 ], method: row[ 1 ], id: row[ 4 ] } )
+				}
+			} )
+
+			it( "throws at startup when the handler lacks an action", function() {
+				expect( () => _mvc().resources( "items" ) ).toThrow( "BoxExpressMvc.UnknownAction" )
+			} )
+
+		} )
+
+		describe( "named routes and buildLink()", function() {
+
+			it( "builds from a route name, a handler.action, and the convention route", function() {
+				expect( variables.app.inject( "/links" ).json() ).toBe( {
+					named: "/items/5",
+					byEvent: "/photos/9/edit",
+					login: "/login",
+					convention: "/pages/about?ref=x",
+					conventionIndex: "/pages/index"
+				} )
+			} )
+
+			it( "throws for a target no route serves", function() {
+				var mvc = _mvc()
+				expect( () => mvc.linkTo( "items.show" ) ).toThrow( "BoxExpressMvc.UnknownRoute" )
+			} )
+
+			it( "throws when a placeholder has no value", function() {
+				var mvc = _mvc()
+				mvc.route( "/items/:id" ).to( "items.show" )
+				expect( () => mvc.linkTo( "items.show" ) ).toThrow( "BoxExpressMvc.MissingRouteParam" )
+			} )
+
+			it( "fills a constrained placeholder and drops an unused optional one", function() {
+				var mvc = _mvc()
+				mvc.route( "/items/:id(\d+)" ).as( "numbered" ).to( "items.show" )
+				mvc.route( "/list/:page?" ).as( "list" ).to( "items.index" )
+				expect( mvc.linkTo( "numbered", { id: 4 } ) ).toBe( "/items/4" )
+				expect( mvc.linkTo( "list" ) ).toBe( "/list" )
+				expect( mvc.linkTo( "list", { page: 2 } ) ).toBe( "/list/2" )
+			} )
+
+		} )
+
+		describe( "the convention route", function() {
+
+			it( "runs handler/action, defaulting to index", function() {
+				expect( variables.app.inject( "/auth/form" ).body ).toBe( "form" )
+				expect( variables.app.inject( "/lifecycle" ).header( "X-Trail" ) ).toBe( "pre:index,action,post:index" )
+				expect( variables.app.inject( "/AUTH/FORM" ).body ).toBe( "form" )
+			} )
+
+			it( "is registered after routes written below it", function() {
+				expect( variables.app.inject( "/after" ).body ).toInclude( "explicit routes" )
+			} )
+
+			it( "answers 404 for an unknown handler, an unknown action, and anything that isn't an action", function() {
+				for ( var path in [ "/ghosts", "/ghosts/index", "/auth/nope", "/auth/helper", "/lifecycle/preHandler", "/lifecycle/postHandler", "/auth/init" ] ) {
+					expect( variables.app.inject( path ).statusCode ).withContext( path ).toBe( 404 )
+				}
+			} )
+
+			it( "is not there unless asked for", function() {
+				var mvc = _mvc()
+				mvc.route( "/items/:id" ).to( "items.show" )
+				expect( _app( mvc ).inject( "/auth/form" ).statusCode ).toBe( 404 )
+			} )
+
+			it( "has to have a :handler segment", function() {
+				expect( () => _mvc().route( "/items/:id" ).end() ).toThrow( "BoxExpressMvc.InvalidRoute" )
+			} )
+
+		} )
+
+		describe( "startup errors", function() {
+
+			it( "names the route for a pattern BoxExpress can't match", function() {
+				expect( () => _mvc().route( "/a/:id?/b" ).to( "items.index" ) ).toThrow( type = "BoxExpressMvc.InvalidRoute", regex = "/a/:id\?/b" )
+				expect( () => _mvc().route( "/files/*/meta" ).to( "items.index" ) ).toThrow( type = "BoxExpressMvc.InvalidRoute", regex = "/files/\*/meta" )
+				expect( () => {
+					var mvc = _mvc()
+					mvc.route( "/x/:handler?/:action?" ).end()
+					mvc.router()
+				} ).toThrow( type = "BoxExpressMvc.InvalidRoute", regex = "/x/:handler" )
+			} )
+
+			it( "catches a route() that was never finished", function() {
+				var mvc = _mvc()
+				mvc.route( "/login" ).withAction( { GET: "form" } )
+				expect( () => mvc.router() ).toThrow( type = "BoxExpressMvc.InvalidRoute", regex = "/login" )
+			} )
+
+			it( "refuses routes added after router()", function() {
+				var mvc = _mvc()
+				mvc.router()
+				expect( () => mvc.route( "/late" ).to( "items.index" ) ).toThrow( "BoxExpressMvc.RoutesFrozen" )
+			} )
+
+		} )
+
+	}
+
+}

@@ -1,0 +1,25 @@
+class {
+
+	function form( event, rc, prc ) {
+		event.renderData( type = "text", data = "form" )
+	}
+
+	function doLogin( event, rc, prc ) {
+		event.renderData( type = "text", data = "doLogin" )
+	}
+
+	function links( event, rc, prc ) {
+		event.renderData( data = {
+			named: event.buildLink( "itemDetail", { id: 5 } ),
+			byEvent: event.buildLink( "photos.edit", { id: 9 } ),
+			login: event.buildLink( "login" ),
+			convention: event.buildLink( "pages.about", { ref: "x" } ),
+			conventionIndex: event.buildLink( "pages" )
+		} )
+	}
+
+	private function helper( event, rc, prc ) {
+		event.renderData( type = "text", data = "helper" )
+	}
+
+}

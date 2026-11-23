@@ -1,0 +1,20 @@
+class {
+
+	function preHandler( event, rc, prc, action ) {
+		if ( !rc.keyExists( "token" ) ) {
+			event.relocate( "/login" )
+		}
+	}
+
+	function secret( event, rc, prc ) {
+		event.setHTTPHeader( "X-Action-Ran", "yes" )
+		event.renderData( data = { secret: true } )
+	}
+
+	function postHandler( event, rc, prc, action ) {
+		if ( !rc.keyExists( "token" ) ) {
+			throw( type = "Guarded.PostRan", message = "postHandler ran after preHandler responded" )
+		}
+	}
+
+}

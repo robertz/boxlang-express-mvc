@@ -1,0 +1,6 @@
+/testbox
+/boxlang_modules/
+/tests/results/
+.DS_Store
+/wirebox
+/examples/boxlang_modules

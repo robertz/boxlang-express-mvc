@@ -1,0 +1,89 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _fixture( path ) {
+		return expandPath( "tests/fixtures/app/" & path )
+	}
+
+	private function _app( config = {} ) {
+		var settings = { handlers: _fixture( "handlers" ), views: _fixture( "views" ), layouts: _fixture( "layouts" ) }
+		settings.append( config )
+		var mvc = boxExpressMvc( settings )
+		mvc.route( "/:handler/:action?" ).end()
+		var app = boxExpress()
+		app.use( ( req, res, next ) => { res.locals.fromMiddleware = "mw"; next() } )
+		app.use( mvc.router() )
+		app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type, message: err.message } ) )
+		return app
+	}
+
+	function beforeAll() {
+		variables.app = _app()
+	}
+
+	function run() {
+
+		describe( "views and layouts", function() {
+
+			it( "renders the implicit view inside the default layout, with rc, prc and event", function() {
+				var res = variables.app.inject( "/pages?q=<s>" )
+				expect( res.statusCode ).toBe( 200 )
+				expect( res.header( "Content-Type" ) ).toInclude( "text/html" )
+				expect( res.body.trim() ).toBe( "<html><title>Home &lt;b&gt;</title><body><h1>Home &lt;b&gt;</h1><p>q=&lt;s&gt; event=pages.index</p><li>one</li><li>&lt;two&gt;</li>
+</body></html>" )
+			} )
+
+			it( "finds a nested handler's implicit view folder", function() {
+				expect( variables.app.inject( "/admin.users/list" ).body ).toInclude( "admin users for admin.users" )
+			} )
+
+			it( "renders the view named by setView()", function() {
+				expect( variables.app.inject( "/pages/about" ).body ).toInclude( "<body><h1>About</h1>" )
+			} )
+
+			it( "skips the layout after noLayout()", function() {
+				var body = variables.app.inject( "/pages/bare" ).body
+				expect( body ).toInclude( "<h1>Bare</h1>" )
+				expect( body ).notToInclude( "<html>" )
+			} )
+
+			it( "uses the layout named by setLayout() or setView()'s second argument", function() {
+				expect( variables.app.inject( "/pages/alt" ).body ).toInclude( "<alt><h1>Alt</h1>" )
+				expect( variables.app.inject( "/pages/both" ).body ).toInclude( "<alt><h1>Both</h1>" )
+			} )
+
+			it( "keeps a status code set in the action", function() {
+				var res = variables.app.inject( "/pages/teapot" )
+				expect( res.statusCode ).toBe( 418 )
+				expect( res.body ).toInclude( "Teapot" )
+			} )
+
+			it( "renders another view inline with view( name, args )", function() {
+				expect( variables.app.inject( "/pages/withPartial" ).body ).toInclude( "[<span>new &amp; shiny:Partial</span>][<span>none:Partial</span>]" )
+			} )
+
+			it( "uses the configured defaultLayout", function() {
+				expect( _app( { defaultLayout: "Alt" } ).inject( "/pages" ).body ).toInclude( "<alt><h1>Home" )
+			} )
+
+			it( "renders without a layout when there is no layouts directory", function() {
+				var app = _app( { layouts: "" } )
+				expect( app.inject( "/pages" ).body.trim() ).toStartWith( "<h1>Home" )
+			} )
+
+			it( "sends a missing view, a missing layout and a path outside the views directory to the error handler", function() {
+				expect( variables.app.inject( "/pages/missing" ).json().type ).toBe( "BoxExpressMvc.ViewNotFound" )
+				expect( variables.app.inject( "/pages/ghostLayout" ).json().type ).toBe( "BoxExpressMvc.ViewNotFound" )
+				expect( variables.app.inject( "/pages/escapeDir" ).json().type ).toBe( "BoxExpressMvc.InvalidViewPath" )
+			} )
+
+			it( "throws at startup for a defaultLayout that isn't there, or layouts without views", function() {
+				expect( () => _app( { defaultLayout: "Ghost" } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+				expect( () => _app( { views: "" } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+				expect( () => _app( { views: _fixture( "nope" ) } ) ).toThrow( "BoxExpressMvc.InvalidConfig" )
+			} )
+
+		} )
+
+	}
+
+}

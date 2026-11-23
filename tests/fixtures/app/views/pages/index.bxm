@@ -1,0 +1,1 @@
+<bx:output><h1>#encodeForHTML( prc.title )#</h1><p>q=#encodeForHTML( rc.q ?: "" )# event=#encodeForHTML( event.getCurrentEvent() )#</p><bx:loop array="#prc.items#" item="item"><li>#encodeForHTML( item )#</li></bx:loop></bx:output>
