@@ -88,9 +88,9 @@ them as scopes.
   doesn't exist, or a pattern BoxExpress can't match (an optional
   segment in the middle of a path), throws when the app starts.
 - **`to()` answers every verb**, as in ColdBox. Restrict verbs with
-  `this.allowedMethods` on the handler (a wrong verb gets a 405; there
-  is no `onInvalidHTTPMethod`), or with `withAction()` or `resources()`
-  on the route.
+  `this.allowedMethods` on the handler (a wrong verb gets a 405, which
+  `onInvalidHTTPMethod` can answer), or with `withAction()` or
+  `resources()` on the route.
 - **An action needs an `event` argument.** A public function without
   one is a helper and is never routable.
 - **Views are not escaped**, the same as in ColdBox. Install `bx-esapi`
