@@ -1,6 +1,6 @@
 # Changelog
 
-**Unreleased**
+**0.2.0**
 - `this.allowedMethods` on a handler limits an action to the listed
   HTTP methods on every route, the convention route included. A wrong
   method gets a 405 with an `Allow` header.
