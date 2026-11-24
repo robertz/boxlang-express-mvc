@@ -24,6 +24,107 @@ class {
 		variables.layout = ""
 		variables.useLayout = true
 		variables.skipRender = false
+		variables.flash = new Flash( req )
+		return this
+	}
+
+	function getFlash() {
+		return variables.flash
+	}
+
+	/**
+	 * Sets a value in rc only if it isn't there already.
+	 */
+	function paramValue( name, value ) {
+		if ( !variables.rc.keyExists( name ) ) {
+			variables.rc[ name ] = value
+		}
+		return this
+	}
+
+	/**
+	 * The named keys of rc, and nothing else a client may have sent.
+	 */
+	function getOnly( keys ) {
+		var wanted = isArray( keys ) ? keys : listToArray( keys )
+		var picked = {}
+		for ( var key in wanted ) {
+			key = trim( key )
+			if ( variables.rc.keyExists( key ) ) {
+				picked[ key ] = variables.rc[ key ]
+			}
+		}
+		return picked
+	}
+
+	function getExcept( keys ) {
+		var unwanted = isArray( keys ) ? keys : listToArray( keys )
+		var rest = {}
+		for ( var key in variables.rc ) {
+			if ( !unwanted.findNoCase( key ) ) {
+				rest[ key ] = variables.rc[ key ]
+			}
+		}
+		return rest
+	}
+
+	function isAjax() {
+		return variables.req.xhr ? true : false
+	}
+
+	/**
+	 * The request body. With json = true it is the parsed value (what
+	 * boxExpressJSON() produced, or a text body deserialized here);
+	 * otherwise it is text.
+	 */
+	function getHTTPContent( json = false ) {
+		var body = variables.req.body
+		if ( json ) {
+			return isSimpleValue( body ) ? ( len( trim( body ) ) ? jsonDeserialize( body ) : {} ) : body
+		}
+		if ( isSimpleValue( body ) ) {
+			return body
+		}
+		return isBinary( body ) ? toString( body, "UTF-8" ) : jsonSerialize( body )
+	}
+
+	/**
+	 * Copies rc into a model: a struct key, or a setter (setTitle() for
+	 * title), for each key that passes include and exclude. Give include
+	 * whenever rc came from a form, or a client can set any property.
+	 */
+	function populateModel( model, include = "", exclude = "" ) {
+		var included = isArray( include ) ? include : listToArray( include )
+		var excluded = isArray( exclude ) ? exclude : listToArray( exclude )
+		var plain = isStruct( model ) && !isObject( model )
+		var settable = {}
+		if ( !plain ) {
+			var md = getMetadata( model )
+			while ( true ) {
+				for ( var prop in md.properties ?: [] ) {
+					settable[ prop.name ] = true
+				}
+				if ( !isStruct( md.extends ?: "" ) || md.extends.isEmpty() ) {
+					break
+				}
+				md = md.extends
+			}
+		}
+		for ( var key in variables.rc ) {
+			if ( ( included.len() && !included.findNoCase( key ) ) || excluded.findNoCase( key ) ) {
+				continue
+			}
+			if ( plain ) {
+				model[ key ] = variables.rc[ key ]
+			} else if ( structKeyExists( model, "set" & key ) || settable.keyExists( key ) ) {
+				invoke( model, "set" & key, [ variables.rc[ key ] ] )
+			}
+		}
+		return model
+	}
+
+	function announce( name, data = {}, async = false ) {
+		variables.mvc.announce( name, data, async, this, variables.rc, variables.res.locals )
 		return this
 	}
 
@@ -65,7 +166,7 @@ class {
 	}
 
 	function getCurrentEvent() {
-		return variables.handlerName & "." & variables.actionName
+		return len( variables.handlerName ) ? variables.handlerName & "." & variables.actionName : ""
 	}
 
 	function getHTTPMethod() {
@@ -112,6 +213,10 @@ class {
 
 	function isNoRender() {
 		return variables.skipRender
+	}
+
+	function isViewSet() {
+		return len( variables.view ) > 0
 	}
 
 	function getView() {

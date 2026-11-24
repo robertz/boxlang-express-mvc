@@ -1,6 +1,6 @@
 /**
  * One per render. A view or layout runs inside _run(), so it sees that
- * function's arguments (event, rc, prc, args) and can call view().
+ * function's arguments (event, rc, prc, flash, args) and can call view().
  */
 class {
 
@@ -15,14 +15,14 @@ class {
 	}
 
 	function render( viewName, layoutName ) {
-		variables.body = _run( variables.viewsRoot, viewName, variables.event, variables.rc, variables.prc, {} )
+		variables.body = _run( variables.viewsRoot, viewName, variables.event, variables.rc, variables.prc, variables.event.getFlash(), {} )
 		if ( !len( layoutName ) ) {
 			return variables.body
 		}
 		if ( !len( variables.layoutsRoot ) ) {
 			throw( type = "BoxExpressMvc.NoLayouts", message = "Layout [#layoutName#] was asked for but boxExpressMvc() has no layouts directory" )
 		}
-		return _run( variables.layoutsRoot, layoutName, variables.event, variables.rc, variables.prc, {} )
+		return _run( variables.layoutsRoot, layoutName, variables.event, variables.rc, variables.prc, variables.event.getFlash(), {} )
 	}
 
 	/**
@@ -33,10 +33,10 @@ class {
 		if ( !len( name ) ) {
 			return variables.body
 		}
-		return _run( variables.viewsRoot, name, variables.event, variables.rc, variables.prc, args )
+		return _run( variables.viewsRoot, name, variables.event, variables.rc, variables.prc, variables.event.getFlash(), args )
 	}
 
-	private function _run( __root, __name, event, rc, prc, args ) {
+	private function _run( __root, __name, event, rc, prc, flash, args ) {
 		var __path = _resolve( __root, __name )
 		var __output = ""
 		bx:savecontent variable="__output" {

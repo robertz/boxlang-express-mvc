@@ -1,6 +1,6 @@
 /**
  * What route( path ) returns. Nothing is registered until to(),
- * toHandler() or end() is called.
+ * toHandler(), toView(), toRedirect() or end() is called.
  */
 class {
 
@@ -39,6 +39,18 @@ class {
 			variables.mvc.addRoute( method, variables.path, handlerName & "." & variables.actions[ method ], routeName )
 			routeName = ""
 		}
+		return this
+	}
+
+	function toView( view, layout = "" ) {
+		variables.done = true
+		variables.mvc.addViewRoute( variables.path, view, layout, variables.name )
+		return this
+	}
+
+	function toRedirect( target, statusCode = 301 ) {
+		variables.done = true
+		variables.mvc.addRedirectRoute( variables.path, target, statusCode, variables.name )
 		return this
 	}
 

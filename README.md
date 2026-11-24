@@ -117,7 +117,8 @@ never change afterwards.
 | `defaultLayout` | Layout name. Defaults to `Main` when `layouts/Main.bxm` exists, otherwise no layout. |
 | `routes` | Path of a routes class (below). Routes can also be added in code with `mvc.route()` and `mvc.resources()`. |
 | `services` | A struct. A handler property named after one of its keys is set to that value at startup. |
-| `injector` | A WireBox injector. `injector.autowire()` is called on each handler at startup. |
+| `injector` | A WireBox injector. `injector.autowire()` is called on each handler and interceptor at startup. |
+| `interceptors` | Directory of interceptor classes, for [`announce()`](#interceptors-and-announce). |
 
 `mvc.getHandlers()` returns each handler's name with its action names,
 for a listing page or a startup log.
@@ -152,6 +153,13 @@ more clearly.
 | `buildLink( to, params )` | The URL of a route name or `handler.action`. `params` fill `:placeholders`; the rest become the query string. |
 | `setHTTPHeader( name, value )`, `setStatusCode( code )` | |
 | `getHTTPMethod()`, `getHTTPHeader( name, defaultValue )` | |
+| `paramValue( name, value )` | Sets a value in `rc` only if it isn't there. |
+| `getOnly( keys )`, `getExcept( keys )` | Part of `rc` as a new struct. `getOnly( "title,body" )` is the safe way to hand form input to a model. |
+| `populateModel( model, include, exclude )` | Copies `rc` into a struct, or into an object through its setters (`setTitle()` for `title`, generated accessors included). **Pass `include`** for anything a form posts, or a client can set any property. |
+| `isAjax()` | `X-Requested-With: XMLHttpRequest` was sent. |
+| `getHTTPContent( json )` | The request body as text, or parsed with `json = true`. |
+| `getFlash()` | The [flash scope](#flash). |
+| `announce( name, data, async )` | Calls [interceptors](#interceptors-and-announce). |
 | `getCurrentEvent()`, `getCurrentHandler()`, `getCurrentAction()` | |
 | `getRequest()`, `getResponse()` | The BoxExpress `req` and `res`, for anything not covered here. |
 
@@ -171,6 +179,84 @@ are skipped.**
 
 An error thrown anywhere in that sequence goes to the app's error
 handler (`app.use( ( err, req, res, next ) => … )`).
+
+### Limiting and wrapping the hooks
+
+```js
+class {
+
+	this.prehandler_only = "edit,update,delete"
+	this.posthandler_except = "index"
+
+	function preHandler( event, rc, prc, action ) { prc.item = itemService.get( rc.id ) }
+
+}
+```
+
+`prehandler_only`, `prehandler_except`, `posthandler_only`,
+`posthandler_except`, `aroundhandler_only` and `aroundhandler_except`
+take a list or an array of action names. A name that isn't an action
+throws at startup.
+
+`aroundHandler` replaces the direct call to the action, so it can do
+something on both sides of it:
+
+```js
+function aroundHandler( event, targetAction, eventArguments, rc, prc ) {
+	transaction {
+		targetAction( argumentCollection = eventArguments )
+	}
+}
+```
+
+`targetAction` takes `( event, rc, prc )`. If `aroundHandler` doesn't
+call it, the action doesn't run. `preHandler` still runs before and
+`postHandler` after.
+
+### Flash
+
+Flash holds values for one redirect: put a message, relocate, read it on
+the next page. It lives in the BoxExpress session, so it needs
+`app.use( boxExpressSession() )` in front of the router.
+
+```js
+function create( event, rc, prc ) {
+	itemService.add( rc.name )
+	event.getFlash().put( "notice", "Item added." )
+	event.relocate( "items.index" )
+}
+```
+
+```html
+<bx:if flash.exists( "notice" )><p>#encodeForHTML( flash.get( "notice" ) )#</p></bx:if>
+```
+
+`flash` is a variable in every view and layout, and `event.getFlash()`
+elsewhere. It has `put( name, value )`, `get( name, defaultValue )`,
+`exists( name )`, `getAll()`, `keep( names )`, `remove( name )` and
+`clear()`.
+
+A value is readable in the request that put it and in the next request
+that reads flash, then it is gone; `keep()` carries it one request
+further. A request that never touches flash (an asset, an API call)
+doesn't use it up. Without a session, reading gives the default and
+`put()` throws.
+
+Handlers are shared between requests, so there is no `flash` variable
+inside a handler as there is in ColdBox; get it from the event.
+
+### `onMissingAction` and `onInvalidHTTPMethod`
+
+`onMissingAction( event, rc, prc, missingAction, eventArguments )` runs
+when the convention route finds the handler but not the action. The
+action name came from the URL, so nothing is rendered by convention:
+send a response or call `setView()`, or the request goes on to the app's
+404.
+
+`onInvalidHTTPMethod( event, rc, prc, faultAction, eventArguments )`
+runs when `this.allowedMethods` refuses a request. The status is already
+405 and the `Allow` header is set; if the function sends nothing, the
+plain "Method Not Allowed" body goes out.
 
 ### `this.allowedMethods`
 
@@ -211,6 +297,17 @@ class {
 		route( "/about", "pages.about" )
 		resources( "photos" )
 		route( "/health", ( req, res ) => res.send( "ok" ) )
+
+		get( "/search", "items.search" )
+		post( "/items", "items.create" )
+		route( "/about" ).toView( "pages/about" )
+		route( "/home" ).toRedirect( "/" )
+
+		group( { pattern: "/admin" }, () => {
+			get( "/", "admin.dashboard.index" )
+			resources( "users", "/users", "admin.users" )
+		} )
+
 		route( "/:handler/:action?" ).end()
 	}
 }
@@ -220,9 +317,19 @@ class {
   to tie methods to actions; other methods then get a 404.
 - `as( name )` names a route for `buildLink()` and `relocate()`.
 - A function as the second argument is a plain BoxExpress handler.
-- A route pointing at a handler or action that doesn't exist throws at
-  startup, as does a `route()` never finished with `to()`,
-  `toHandler()` or `end()`.
+- `get()`, `post()`, `put()`, `patch()` and `delete()` take
+  `( path, target, name )` and answer that one method.
+- `toView( view, layout )` renders a view on GET with no handler behind
+  it. The view sees `rc`, `prc`, `flash` and an `event` with no handler
+  or action.
+- `toRedirect( target, statusCode )` redirects every method, with a 301
+  unless told otherwise.
+- `group( { pattern: "/admin" }, () => { … } )` puts the pattern in
+  front of every path declared inside it. Groups nest. `pattern` is the
+  only option.
+- A route pointing at a handler, action or view that doesn't exist
+  throws at startup, as does a `route()` never finished with `to()`,
+  `toHandler()`, `toView()`, `toRedirect()` or `end()`.
 
 Paths are BoxExpress paths: `:name`, a trailing `:name?`, a trailing `*`
 or `*name`, and constraints such as `:id(\d+)`. An optional or wildcard
@@ -242,19 +349,30 @@ above general ones.
 | PUT, PATCH | `/photos/:id` | `update` |
 | DELETE | `/photos/:id` | `delete` |
 
-The handler needs all seven actions. HTML forms can only send GET and
-POST, and there is no `_method` override; put a small middleware in
-front if you need one:
+The handler needs all seven actions.
 
-```js
-app.use( ( req, res, next ) => {
-	var override = req.body._method ?: ""
-	if ( req.method == "POST" && isSimpleValue( override ) && listFindNoCase( "PUT,PATCH,DELETE", override ) ) {
-		req.method = uCase( override )
-	}
-	next()
-} )
+- `apiResources( "photos" )` leaves out `new` and `edit`, the two routes
+  that only serve HTML forms.
+- `resources( "comments", "/photos/:photoId/comments" )` nests: the
+  second argument is the path to use in place of `/comments`, and
+  `rc.photoId` arrives with every action. A third argument names the
+  handler when it isn't the resource's name.
+
+### `_method`
+
+HTML forms can only send GET and POST. A POST whose body has a `_method`
+field of `PUT`, `PATCH` or `DELETE` is routed as that method:
+
+```html
+<form method="post" action="/photos/4">
+	<input type="hidden" name="_method" value="DELETE">
+	<button>Delete</button>
+</form>
 ```
+
+It needs a body parser (`boxExpressUrlencoded()`) in front of the
+router. Only a POST is upgraded, so a link or an image tag can't use it,
+and the CSRF check has already run. `_method` is left out of `rc`.
 
 ### The convention route
 
@@ -342,6 +460,53 @@ class {
 
 Tested with WireBox 8.3, including in the `boxlang:cli` Docker image. It
 adds about a second and a half to startup.
+
+## Interceptors and `announce()`
+
+For telling other code that something happened without the handler
+knowing who is listening.
+
+```js
+mvc = boxExpressMvc( { handlers: …, interceptors: expandPath( "./interceptors" ), services: svc } )
+```
+
+```js
+// interceptors/Notifier.bx
+class {
+
+	property name="mailer";
+
+	function onItemAdded( event, data, rc, prc ) {
+		mailer.send( "New item: #data.item.name#" )
+	}
+
+}
+```
+
+```js
+// in an action
+event.announce( "onItemAdded", { item: item } )
+```
+
+- Each public function of an interceptor listens for the event of that
+  name. Interceptors are created once at startup and get the same
+  property injection as handlers, so the same rule applies: nothing
+  about a request goes in `variables`.
+- Listeners run in file-name order, in the request's thread. One that
+  returns `true` stops the rest. An error goes to the app's error
+  handler like any other.
+- An event nobody listens for does nothing, so a misspelt name fails
+  silently.
+- `event.announce( name, data, true )` runs the listeners on another
+  thread and returns at once. The response may have gone by the time
+  they run, so they must not touch it; an error there is printed, not
+  handled.
+- Outside a request (a scheduled job, a service), call
+  `mvc.announce( name, data )`. Listeners then get a null `event` and
+  empty `rc` and `prc`.
+
+There are no built-in events such as ColdBox's `preProcess`. Middleware
+and `res.onBeforeSend()` cover those.
 
 ## Testing
 

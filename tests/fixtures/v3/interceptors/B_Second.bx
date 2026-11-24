@@ -1,0 +1,17 @@
+class {
+
+	property name="log";
+
+	function onNoteSaved( event, data, rc, prc ) {
+		prc.heard.append( "second" )
+	}
+
+	function onSlow( event, data, rc, prc ) {
+		log.add( "slow:" & data.n )
+	}
+
+	function onBackground( event, data, rc, prc ) {
+		log.add( "background:" & isNull( event ) & ":" & data.job )
+	}
+
+}

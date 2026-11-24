@@ -1,0 +1,17 @@
+class accessors="true" {
+
+	property name="title" default="";
+	property name="body" default="";
+	property name="admin" default="false";
+
+	variables.slug = ""
+
+	function setSlug( value ) {
+		variables.slug = "slug-" & value
+	}
+
+	function getSlug() {
+		return variables.slug
+	}
+
+}

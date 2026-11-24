@@ -1,5 +1,24 @@
 # Changelog
 
+**0.3.0**
+- Flash: `event.getFlash()` and a `flash` variable in views, kept in the
+  BoxExpress session.
+- `this.prehandler_only` / `_except`, the same for `posthandler` and
+  `aroundhandler`, and `aroundHandler( event, targetAction,
+  eventArguments, rc, prc )`.
+- Routes: `get()`, `post()`, `put()`, `patch()`, `delete()`, `group()`,
+  `toView()`, `toRedirect()`, `apiResources()`, and `resources()` with a
+  pattern and a handler for nesting.
+- A POST with `_method=PUT`, `PATCH` or `DELETE` in its body is routed
+  as that method. `_method` no longer appears in `rc`.
+- Event: `paramValue()`, `getOnly()`, `getExcept()`, `populateModel()`,
+  `isAjax()`, `getHTTPContent()`.
+- `onMissingAction` and `onInvalidHTTPMethod` on a handler.
+- Interceptors: an `interceptors` setting, `event.announce()` and
+  `mvc.announce()`.
+- **Changed:** `aroundHandler`, `onMissingAction` and
+  `onInvalidHTTPMethod` are reserved names and can't be actions.
+
 **0.2.0**
 - `this.allowedMethods` on a handler limits an action to the listed
   HTTP methods on every route, the convention route included. A wrong

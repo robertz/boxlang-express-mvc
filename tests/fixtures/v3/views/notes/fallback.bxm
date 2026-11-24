@@ -1,0 +1,1 @@
+<bx:output>fallback for #encodeForHTML( event.getCurrentAction() )#</bx:output>

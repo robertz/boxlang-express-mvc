@@ -1,0 +1,9 @@
+class {
+
+	this.prehandler_only = "idnex";
+
+	function preHandler( event, rc, prc, action ) {}
+
+	function index( event, rc, prc ) {}
+
+}

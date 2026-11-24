@@ -48,9 +48,16 @@ them as scopes.
 | `resources( "photos" )` | same seven routes | seven `app.<method>()` calls |
 | `route( "/:handler/:action?" ).end()` | same, opt-in | none |
 | `route().as( "name" )` | same | none |
-| `preHandler`, `postHandler` | same | middleware on the route |
+| `preHandler`, `postHandler`, `aroundHandler` | same | middleware on the route |
+| `this.prehandler_only`, `this.allowedMethods` | same | route-level middleware, one `app.<method>()` per verb |
+| `flash.put()`, `flash.get()` | `event.getFlash()`, and `flash` in views | `req.session` |
+| `get()`, `post()`, `group()`, `toView()`, `toRedirect()` | same (`group()` takes `pattern` only) | `app.get()`, a mounted router, `res.render()`, `res.redirect()` |
+| `apiResources()`, nested `resources()` | same | one `app.<method>()` per route |
+| `populateModel()`, `event.paramValue()`, `getOnly()` | on the event | assign from `req.body` |
+| `announce()` and interceptors | `event.announce()`, an `interceptors` directory | call the function |
+| `onMissingAction`, `onInvalidHTTPMethod` | same | a later route, a 405 route |
 | `onError`, `exceptionHandler` | the app's error middleware | `app.use( ( err, req, res, next ) => … )` |
-| interceptors, `preProcess` | middleware | `app.use( ( req, res, next ) => … )` |
+| `preProcess`, `postProcess` and the other built-in interception points | middleware | `app.use( ( req, res, next ) => … )` |
 | `property name="x" inject="X"` | same, with `injector:` | construct and pass in |
 | `getSetting()`, `ColdBox.cfc` | your own struct | `app.set()`, `app.getSetting()` |
 | `Application.cfc` + a servlet container | `server.bxs` | `server.bxs` |
@@ -88,6 +95,14 @@ them as scopes.
   one is a helper and is never routable.
 - **Views are not escaped**, the same as in ColdBox. Install `bx-esapi`
   and use the `encodeFor…()` functions.
+- **`flash` and `populateModel()` are on the event.** A handler is one
+  shared object, so it can't hold a per-request `flash`. Use
+  `event.getFlash()` and `event.populateModel()`.
+- **`announce()` has no declared interception points.** Any name works,
+  and one nobody listens for does nothing. Listeners take
+  `( event, data, rc, prc )`, with no `buffer`.
+- **`onMissingAction` only fires on the convention route**, and renders
+  nothing unless it calls `setView()`.
 - **Nothing reloads on its own** except `.bxm` files. Use
   `app.set( "reloadOnChange", true )` in development; there is no
   `?fwreinit`.
@@ -96,17 +111,15 @@ them as scopes.
 
 - Running an existing ColdBox app, ColdBox modules (`ModuleConfig.cfc`),
   or CBWIRE
-- Interceptors and `announce()`. Use middleware; `res.onBeforeSend()`
-  covers "just before the response goes out".
+- Built-in interception points (`preProcess`, `preRender` and the
+  rest), and registering interceptors at runtime. Use middleware;
+  `res.onBeforeSend()` covers "just before the response goes out".
 - HMVC modules
-- `aroundHandler`, `onMissingAction`, `onError`, `onInvalidHTTPMethod`,
-  `this.prehandler_only`
+- Handler `onError`. Use `aroundHandler` or the app's error middleware.
 - Router extras: `withSSL()`, `withNamespace()`, `withDomain()`,
-  `group()`, `toRedirect()`, `get()` / `post()` shortcuts, nested
-  resources
-- `_method` form override (a few lines of middleware; see the README)
-- Flash scope, `event.paramValue()`, `event.getHTMLBaseURL()`, html
-  helper, i18n, validation (BoxExpress has `boxExpressValidate()`)
+  `toResponse()`, and `group()` options other than `pattern`
+- `event.getHTMLBaseURL()`, html helper, i18n, validation (BoxExpress
+  has `boxExpressValidate()`)
 - CacheBox and LogBox integration
 - Sessions as a scope. Use `boxExpressSession()` and
   `event.getRequest().session`.

@@ -1,0 +1,15 @@
+class {
+
+	function index( event, rc, prc ) { _say( event, rc ) }
+	function new( event, rc, prc ) { _say( event, rc ) }
+	function create( event, rc, prc ) { _say( event, rc ) }
+	function show( event, rc, prc ) { _say( event, rc ) }
+	function edit( event, rc, prc ) { _say( event, rc ) }
+	function update( event, rc, prc ) { _say( event, rc ) }
+	function delete( event, rc, prc ) { _say( event, rc ) }
+
+	private function _say( event, rc ) {
+		event.renderData( data = { action: event.getCurrentAction(), id: rc.id ?: "", noteId: rc.noteId ?: "" } )
+	}
+
+}

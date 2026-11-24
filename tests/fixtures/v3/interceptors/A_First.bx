@@ -1,0 +1,11 @@
+class {
+
+	function onNoteSaved( event, data, rc, prc ) {
+		prc.heard = prc.heard ?: []
+		prc.heard.append( "first:" & data.title & ":" & event.getCurrentAction() )
+		if ( data.title == "stop" ) {
+			return true
+		}
+	}
+
+}

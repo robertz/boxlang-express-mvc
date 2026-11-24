@@ -1,0 +1,32 @@
+class {
+
+	function configure() {
+		get( "/notes", "notes.index", "noteList" )
+		post( "/notes", "notes.save" )
+		put( "/notes/:id", "notes.update" )
+		patch( "/notes/:id", "notes.update" )
+		delete( "/notes/:id", "notes.update" )
+		route( "/notes/strict" ).to( "notes.strict" )
+
+		group( { pattern: "/admin" }, () => {
+			get( "/", "notes.index" )
+			route( "/edit" ).as( "adminEdit" ).to( "notes.edit" )
+			apiResources( "things" )
+			group( { pattern: "/deep/" }, () => {
+				get( "/x", ( req, res ) => res.send( "deep" ) )
+			} )
+		} )
+		get( "/outside", ( req, res ) => res.send( "outside" ) )
+
+		route( "/about" ).as( "about" ).toView( "pages/about" )
+		route( "/bare" ).toView( "pages/about", "Bare" )
+		route( "/old" ).toRedirect( "/about" )
+		route( "/moved" ).toRedirect( "/about", 302 )
+
+		apiResources( "things" )
+		resources( "comments", "/notes/:noteId/comments", "things" )
+
+		route( "/:handler/:action?" ).end()
+	}
+
+}

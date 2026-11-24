@@ -1,0 +1,268 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _settings() {
+		return {
+			handlers: expandPath( "tests/fixtures/v3/handlers" ),
+			interceptors: expandPath( "tests/fixtures/v3/interceptors" ),
+			views: expandPath( "tests/fixtures/v3/views" ),
+			layouts: expandPath( "tests/fixtures/v3/layouts" ),
+			routes: expandPath( "tests/fixtures/v3/config/Router.bx" ),
+			services: { log: variables.log }
+		}
+	}
+
+	private function _json( url, method = "GET" ) {
+		return variables.app.inject( { method: method, url: url } ).json()
+	}
+
+	private function _waitFor( entry ) {
+		for ( var i = 1; i <= 100; i++ ) {
+			if ( variables.log.contains( entry ) ) {
+				return true
+			}
+			sleep( 20 )
+		}
+		return false
+	}
+
+	function beforeAll() {
+		variables.log = createObject( "java", "java.util.concurrent.CopyOnWriteArrayList" ).init()
+		variables.mvc = boxExpressMvc( _settings() )
+		variables.app = boxExpress()
+		variables.app.use( boxExpressSession( { saveUninitialized: false } ) )
+		variables.app.use( boxExpressJSON(), boxExpressUrlencoded(), boxExpressText() )
+		variables.app.use( variables.mvc.router() )
+		variables.app.use( ( req, res, next ) => res.status( 404 ).send( "app 404" ) )
+		variables.app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type, message: err.message } ) )
+	}
+
+	function run() {
+
+		describe( "flash", function() {
+
+			it( "carries a value across one redirect, then drops it", function() {
+				var first = variables.app.inject( "/notes/remember?msg=hello" )
+				expect( first.statusCode ).toBe( 302 )
+				var second = variables.app.inject( { url: "/notes/recall", cookies: first.cookies } )
+				expect( second.json() ).toBe( { notice: "hello", exists: true } )
+				var third = variables.app.inject( { url: "/notes/recall", cookies: first.cookies } )
+				expect( third.json() ).toBe( { notice: "none", exists: false } )
+			} )
+
+			it( "keeps a value for one more request with keep()", function() {
+				var first = variables.app.inject( "/notes/remember?msg=again" )
+				expect( variables.app.inject( { url: "/notes/keeper", cookies: first.cookies } ).json().notice ).toBe( "again" )
+				expect( variables.app.inject( { url: "/notes/recall", cookies: first.cookies } ).json().notice ).toBe( "again" )
+				expect( variables.app.inject( { url: "/notes/recall", cookies: first.cookies } ).json().notice ).toBe( "none" )
+			} )
+
+			it( "is a variable in views", function() {
+				var first = variables.app.inject( "/notes/remember?msg=in+a+view" )
+				expect( variables.app.inject( { url: "/about", cookies: first.cookies } ).body ).toBe( "[about:in a view:]" )
+				expect( variables.app.inject( "/about" ).body ).toBe( "[about:no flash:]" )
+			} )
+
+			it( "reads as empty without a session and refuses to put", function() {
+				var app = boxExpress()
+				app.use( boxExpressMvc( _settings() ).router() )
+				app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type } ) )
+				expect( app.inject( "/notes/recall" ).json().notice ).toBe( "none" )
+				expect( app.inject( "/notes/remember" ).json().type ).toBe( "BoxExpressMvc.NoSession" )
+			} )
+
+		} )
+
+		describe( "prehandler_only, posthandler_except and aroundHandler", function() {
+
+			it( "runs preHandler only for the listed actions", function() {
+				expect( _json( "/admin/edit" ).pre ).toBe( "ran" )
+				expect( _json( "/notes" ).pre ).toBe( "" )
+			} )
+
+			it( "skips postHandler for an excepted action", function() {
+				variables.log.clear()
+				_json( "/notes" )
+				_json( "/admin/edit" )
+				expect( variables.log.toArray() ).toBe( [ "post:edit" ] )
+			} )
+
+			it( "wraps the listed action in aroundHandler", function() {
+				expect( _json( "/notes/wrapped" ) ).toBe( { before: true, inner: "action ran", action: "wrapped" } )
+				expect( _json( "/notes" ).action ).toBe( "index" )
+			} )
+
+			it( "fails at startup when a filter names something that isn't an action", function() {
+				expect( () => boxExpressMvc( { handlers: expandPath( "tests/fixtures/badhooks/handlers" ) } ) ).toThrow( "BoxExpressMvc.InvalidHandler" )
+			} )
+
+		} )
+
+		describe( "route shortcuts", function() {
+
+			it( "registers one method with get(), post(), put(), patch() and delete()", function() {
+				expect( _json( "/notes" ).action ).toBe( "index" )
+				expect( _json( "/notes", "POST" ).action ).toBe( "save" )
+				for ( var method in [ "PUT", "PATCH", "DELETE" ] ) {
+					expect( _json( "/notes/7", method ) ).toBe( { action: "update", pre: "ran", method: method, id: "7", hasOverride: false } )
+				}
+				expect( variables.app.inject( { method: "POST", url: "/notes/7" } ).statusCode ).toBe( 404 )
+			} )
+
+			it( "puts a group's pattern in front of everything declared inside it", function() {
+				expect( _json( "/admin" ).action ).toBe( "index" )
+				expect( _json( "/admin/edit" ).action ).toBe( "edit" )
+				expect( _json( "/admin/things/3" ) ).toBe( { action: "show", id: "3", noteId: "" } )
+				expect( variables.app.inject( "/admin/deep/x" ).body ).toBe( "deep" )
+				expect( variables.app.inject( "/outside" ).body ).toBe( "outside" )
+				expect( variables.app.inject( "/admin/outside" ).statusCode ).toBe( 404 )
+				expect( variables.mvc.linkTo( "adminEdit" ) ).toBe( "/admin/edit" )
+			} )
+
+			it( "renders a view with toView(), in the default or a named layout", function() {
+				expect( variables.app.inject( "/about" ).body ).toBe( "[about:no flash:]" )
+				expect( variables.app.inject( "/bare" ).body ).toBe( "bare(about:no flash:)" )
+				expect( variables.app.inject( { method: "POST", url: "/about" } ).statusCode ).toBe( 404 )
+				expect( variables.mvc.linkTo( "about" ) ).toBe( "/about" )
+			} )
+
+			it( "redirects with toRedirect()", function() {
+				var res = variables.app.inject( "/old" )
+				expect( res.statusCode ).toBe( 301 )
+				expect( res.headers.location ).toBe( "/about" )
+				expect( variables.app.inject( "/moved" ).statusCode ).toBe( 302 )
+			} )
+
+			it( "fails at startup for a view that doesn't exist or a group without a pattern", function() {
+				var mvc = boxExpressMvc( _settings() )
+				expect( () => mvc.route( "/x" ).toView( "pages/nope" ) ).toThrow( "BoxExpressMvc.InvalidRoute" )
+				expect( () => mvc.group( {}, () => {} ) ).toThrow( "BoxExpressMvc.InvalidRoute" )
+				expect( () => mvc.group( { pattern: "/a", handler: "notes" }, () => {} ) ).toThrow( "BoxExpressMvc.InvalidRoute" )
+			} )
+
+		} )
+
+		describe( "_method", function() {
+
+			it( "routes a POST with _method as that method, and keeps it out of rc", function() {
+				var res = variables.app.inject( { method: "POST", url: "/notes/9", form: { _method: "delete" } } )
+				expect( res.json() ).toBe( { action: "update", pre: "ran", method: "DELETE", id: "9", hasOverride: false } )
+				expect( variables.app.inject( { method: "POST", url: "/things/4", form: { _method: "PUT" } } ).json().action ).toBe( "update" )
+			} )
+
+			it( "ignores it on a GET and for a method it doesn't know", function() {
+				expect( variables.app.inject( "/notes?_method=DELETE" ).json().action ).toBe( "index" )
+				expect( variables.app.inject( { method: "POST", url: "/notes", form: { _method: "TRACE" } } ).json().action ).toBe( "save" )
+			} )
+
+		} )
+
+		describe( "event helpers", function() {
+
+			it( "has paramValue, getOnly, getExcept, isAjax and getHTTPContent", function() {
+				var res = variables.app.inject( { method: "POST", url: "/notes/helpers?secret=s&title=mine", body: { extra: 1 } } ).json()
+				expect( res.page ).toBe( 1 )
+				expect( res.title ).toBe( "mine" )
+				expect( res.only ).toBe( { title: "mine" } )
+				expect( res.except ).toBe( { title: "mine", extra: 1, handler: "notes", action: "helpers" } )
+				expect( res.ajax ).toBeFalse()
+				expect( res.parsed ).toBe( { extra: 1 } )
+				expect( jsonDeserialize( res.text ) ).toBe( { extra: 1 } )
+			} )
+
+			it( "reads a text body and the ajax header", function() {
+				var res = variables.app.inject( { method: "POST", url: "/notes/helpers", headers: { "Content-Type": "text/plain", "X-Requested-With": "XMLHttpRequest" }, body: '{"a":2}' } ).json()
+				expect( res.ajax ).toBeTrue()
+				expect( res.text ).toBe( '{"a":2}' )
+				expect( res.parsed ).toBe( { a: 2 } )
+			} )
+
+			it( "populates a model through setters and accessors, within include and exclude", function() {
+				var res = variables.app.inject( "/notes/populate?title=T&body=B&admin=true&slug=s&unknown=1" ).json()
+				expect( res.title ).toBe( "T" )
+				expect( res.body ).toBe( "B" )
+				expect( res.slug ).toBe( "slug-s" )
+				expect( res.admin ).toBeFalse()
+				expect( res.openTitle ).toBe( "T" )
+				expect( res.openAdmin ).toBeFalse()
+				expect( res.plain ).toBe( { title: "T" } )
+			} )
+
+		} )
+
+		describe( "resources", function() {
+
+			it( "leaves new and edit out of apiResources()", function() {
+				expect( _json( "/things" ).action ).toBe( "index" )
+				expect( _json( "/things", "POST" ).action ).toBe( "create" )
+				expect( _json( "/things/new" ) ).toBe( { action: "show", id: "new", noteId: "" } )
+				expect( variables.app.inject( "/things/5/edit" ).statusCode ).toBe( 404 )
+				expect( _json( "/things/5", "DELETE" ).action ).toBe( "delete" )
+			} )
+
+			it( "nests with a pattern and a handler", function() {
+				expect( _json( "/notes/3/comments" ) ).toBe( { action: "index", id: "", noteId: "3" } )
+				expect( _json( "/notes/3/comments/new" ).action ).toBe( "new" )
+				expect( _json( "/notes/3/comments/8/edit" ) ).toBe( { action: "edit", id: "8", noteId: "3" } )
+			} )
+
+		} )
+
+		describe( "onMissingAction and onInvalidHTTPMethod", function() {
+
+			it( "hands a missing action on the convention route to onMissingAction", function() {
+				expect( _json( "/notes/ghost" ) ).toBe( { missing: "ghost" } )
+				expect( variables.app.inject( "/notes/viewit" ).body ).toBe( "[fallback for viewit]" )
+			} )
+
+			it( "falls through to the app's 404 when the hook does nothing", function() {
+				var res = variables.app.inject( "/notes/whatever" )
+				expect( res.statusCode ).toBe( 404 )
+				expect( res.body ).toBe( "app 404" )
+				expect( variables.app.inject( "/notes/preHandler" ).statusCode ).toBe( 404 )
+				expect( variables.app.inject( "/nobody/ghost" ).statusCode ).toBe( 404 )
+			} )
+
+			it( "hands a wrong method to onInvalidHTTPMethod, with the 405 as the fallback", function() {
+				var res = variables.app.inject( "/notes/strict" )
+				expect( res.statusCode ).toBe( 405 )
+				expect( res.headers.allow ).toBe( "POST" )
+				expect( res.json() ).toBe( { fault: "strict", method: "GET" } )
+				var plain = variables.app.inject( "/notes/save" )
+				expect( plain.statusCode ).toBe( 405 )
+				expect( plain.body ).toBe( "Method Not Allowed" )
+			} )
+
+		} )
+
+		describe( "announce()", function() {
+
+			it( "calls each interceptor function of that name in file order", function() {
+				expect( _json( "/notes/tell?title=hi" ).heard ).toBe( [ "first:hi:tell", "second" ] )
+			} )
+
+			it( "stops when a listener returns true", function() {
+				expect( _json( "/notes/tell?title=stop" ).heard ).toBe( [ "first:stop:tell" ] )
+			} )
+
+			it( "runs async listeners after the response, with injected services", function() {
+				variables.log.clear()
+				expect( _json( "/notes/tellLater?n=5" ).sent ).toBeTrue()
+				expect( _waitFor( "slow:5" ) ).toBeTrue()
+			} )
+
+			it( "works outside a request, with no event", function() {
+				variables.log.clear()
+				variables.mvc.announce( "onBackground", { job: "nightly" } )
+				expect( variables.log.toArray() ).toBe( [ "background:true:nightly" ] )
+				variables.mvc.announce( "onNobodyListens" )
+			} )
+
+			it( "does not make an interceptor function routable", function() {
+				expect( variables.mvc.getHandlers().keyExists( "A_First" ) ).toBeFalse()
+			} )
+
+		} )
+
+	}
+
+}

@@ -1,0 +1,101 @@
+/**
+ * Values that survive one redirect. Kept in the BoxExpress session, so
+ * it needs boxExpressSession() in front of the router. A value put in
+ * one request is readable in that request and the next one that reads
+ * flash, then it is gone.
+ */
+class {
+
+	static {
+		KEY = "_bxmvcFlash"
+	}
+
+	function init( req ) {
+		variables.req = req
+		variables.loaded = false
+		variables.current = {}
+		return this
+	}
+
+	function put( name, value ) {
+		_load()
+		var store = _session( true )
+		if ( !isStruct( store[ static.KEY ] ?: "" ) ) {
+			store[ static.KEY ] = {}
+		}
+		store[ static.KEY ][ name ] = value
+		variables.current[ name ] = value
+		return this
+	}
+
+	function get( name, defaultValue = "" ) {
+		_load()
+		return variables.current[ name ] ?: defaultValue
+	}
+
+	function exists( name ) {
+		_load()
+		return variables.current.keyExists( name )
+	}
+
+	function getAll() {
+		_load()
+		return variables.current.copy()
+	}
+
+	/**
+	 * Carries what this request read on to the next one: every value, or
+	 * the ones named.
+	 */
+	function keep( names = "" ) {
+		_load()
+		var wanted = isArray( names ) ? names : listToArray( names )
+		for ( var name in variables.current ) {
+			if ( wanted.isEmpty() || wanted.findNoCase( name ) ) {
+				put( name, variables.current[ name ] )
+			}
+		}
+		return this
+	}
+
+	function remove( name ) {
+		_load()
+		variables.current.delete( name )
+		var store = _session( false )
+		if ( isStruct( store ) && isStruct( store[ static.KEY ] ?: "" ) ) {
+			store[ static.KEY ].delete( name )
+		}
+		return this
+	}
+
+	function clear() {
+		_load()
+		variables.current = {}
+		var store = _session( false )
+		if ( isStruct( store ) ) {
+			store.delete( static.KEY )
+		}
+		return this
+	}
+
+	private function _load() {
+		if ( variables.loaded ) {
+			return
+		}
+		variables.loaded = true
+		var store = _session( false )
+		if ( isStruct( store ) && isStruct( store[ static.KEY ] ?: "" ) ) {
+			variables.current = store[ static.KEY ]
+			store.delete( static.KEY )
+		}
+	}
+
+	private function _session( required ) {
+		var store = variables.req.session ?: ""
+		if ( !isStruct( store ) && required ) {
+			throw( type = "BoxExpressMvc.NoSession", message = "flash needs a session: put app.use( boxExpressSession() ) in front of the router" )
+		}
+		return store
+	}
+
+}

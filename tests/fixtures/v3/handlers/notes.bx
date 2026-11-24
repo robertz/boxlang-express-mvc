@@ -1,0 +1,112 @@
+class {
+
+	property name="log";
+
+	this.prehandler_only = "edit,update";
+	this.posthandler_except = [ "index" ];
+	this.aroundhandler_only = "wrapped";
+	this.allowedMethods = { save: "POST", strict: "POST" };
+
+	function preHandler( event, rc, prc, action ) {
+		prc.pre = "ran"
+	}
+
+	function postHandler( event, rc, prc, action ) {
+		log.add( "post:" & action )
+	}
+
+	function aroundHandler( event, targetAction, eventArguments, rc, prc ) {
+		prc.before = true
+		targetAction( argumentCollection = eventArguments )
+		event.renderData( data = { before: prc.before, inner: prc.inner, action: event.getCurrentAction() } )
+	}
+
+	function onInvalidHTTPMethod( event, rc, prc, faultAction, eventArguments ) {
+		if ( faultAction == "strict" ) {
+			event.renderData( data = { fault: faultAction, method: event.getHTTPMethod() }, statusCode = 405 )
+		}
+	}
+
+	function onMissingAction( event, rc, prc, missingAction, eventArguments ) {
+		if ( missingAction == "ghost" ) {
+			event.renderData( data = { missing: missingAction } )
+		} else if ( missingAction == "viewit" ) {
+			event.setView( "notes/fallback" )
+		}
+	}
+
+	function index( event, rc, prc ) {
+		event.renderData( data = { action: "index", pre: prc.pre ?: "" } )
+	}
+
+	function edit( event, rc, prc ) {
+		event.renderData( data = { action: "edit", pre: prc.pre ?: "" } )
+	}
+
+	function update( event, rc, prc ) {
+		event.renderData( data = { action: "update", pre: prc.pre ?: "", method: event.getHTTPMethod(), id: rc.id ?: "", hasOverride: rc.keyExists( "_method" ) } )
+	}
+
+	function wrapped( event, rc, prc ) {
+		prc.inner = "action ran"
+	}
+
+	function save( event, rc, prc ) {
+		event.renderData( data = { action: "save" } )
+	}
+
+	function strict( event, rc, prc ) {
+		event.renderData( data = { action: "strict" } )
+	}
+
+	function remember( event, rc, prc ) {
+		event.getFlash().put( "notice", rc.msg ?: "saved" )
+		event.relocate( "/notes/recall" )
+	}
+
+	function recall( event, rc, prc ) {
+		var flash = event.getFlash()
+		event.renderData( data = { notice: flash.get( "notice", "none" ), exists: flash.exists( "notice" ) } )
+	}
+
+	function keeper( event, rc, prc ) {
+		event.getFlash().keep()
+		event.renderData( data = { notice: event.getFlash().get( "notice", "none" ) } )
+	}
+
+	function helpers( event, rc, prc ) {
+		event.paramValue( "page", 1 ).paramValue( "title", "default" )
+		event.renderData( data = {
+			page: rc.page,
+			title: rc.title,
+			only: event.getOnly( "title, missing" ),
+			except: event.getExcept( "secret,page" ),
+			ajax: event.isAjax(),
+			parsed: event.getHTTPContent( json = true ),
+			text: event.getHTTPContent()
+		} )
+	}
+
+	function populate( event, rc, prc ) {
+		var note = event.populateModel( new tests.fixtures.v3.models.Note(), "title,body,slug" )
+		var open = event.populateModel( new tests.fixtures.v3.models.Note(), "", "admin" )
+		var plain = event.populateModel( {}, [ "title" ] )
+		event.renderData( data = {
+			title: note.getTitle(), body: note.getBody(), admin: note.getAdmin(), slug: note.getSlug(),
+			openAdmin: open.getAdmin(), openTitle: open.getTitle(),
+			plain: plain
+		} )
+	}
+
+	function tell( event, rc, prc ) {
+		event.announce( "onNoteSaved", { title: rc.title ?: "" } )
+		event.announce( "onNobodyListens" )
+		event.renderData( data = { heard: prc.heard ?: [] } )
+	}
+
+	function tellLater( event, rc, prc ) {
+		event.announce( "onSlow", { n: rc.n ?: 0 }, true )
+		event.renderData( data = { sent: true } )
+	}
+
+}
