@@ -1,0 +1,10 @@
+<bx:output>
+<div class="container my-5">
+	<h1 class="h3">About #encodeForHTML( prc.appName )#</h1>
+	<p>
+		This page has no handler. <code>route( "/about" ).toView( "main/about" )</code> in
+		<code>config/Router.bx</code> renders this file inside the default layout.
+	</p>
+	<p><a href="#event.buildLink( "main.index" )#">Back</a></p>
+</div>
+</bx:output>

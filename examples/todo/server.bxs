@@ -22,7 +22,8 @@ app.use( boxExpressRateLimit( {
 
 // Every form posts a token that has to match the one in the visitor's
 // session (the views get it from event.getRequest().csrfToken()). The
-// session comes first, then the form parser, then the check.
+// session comes first, then the form parser, then the check. The
+// session is also where flash messages wait for the next page.
 app.use( boxExpressSession( { saveUninitialized: false } ) )
 app.use( boxExpressUrlencoded() )
 app.use( boxExpressCsrf() )

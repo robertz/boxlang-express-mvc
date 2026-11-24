@@ -5,7 +5,4 @@
 	<button>Save</button>
 	<a href="#event.buildLink( "todos.index" )#">Cancel</a>
 </form>
-<bx:if ( rc.error ?: "" ) == "title">
-	<p class="error">A todo needs a title.</p>
-</bx:if>
 </bx:output>

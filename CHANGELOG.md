@@ -18,6 +18,8 @@
   `mvc.announce()`.
 - **Changed:** `aroundHandler`, `onMissingAction` and
   `onInvalidHTTPMethod` are reserved names and can't be actions.
+- `examples/todo` uses flash for its messages and
+  `this.prehandler_only`; `examples/starter` uses `get()` and `toView()`.
 
 **0.2.0**
 - `this.allowedMethods` on a handler limits an action to the listed

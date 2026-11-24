@@ -22,6 +22,9 @@
 </head>
 <body>
 	<h1><a href="#event.buildLink( "todos.index" )#">Todos</a></h1>
+	<bx:if flash.exists( "error" )>
+		<p class="error">#encodeForHTML( flash.get( "error" ) )#</p>
+	</bx:if>
 	#view()#
 </body>
 </html>

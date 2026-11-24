@@ -33,6 +33,7 @@
 				<ul>
 					<li><a href="/healthcheck">/healthcheck</a>, a plain BoxExpress function</li>
 					<li><a href="/api/echo">/api/echo</a>, a JSON response</li>
+					<li><a href="#event.buildLink( "about" )#">/about</a>, a view with no handler</li>
 				</ul>
 			</section>
 

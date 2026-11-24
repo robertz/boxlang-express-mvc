@@ -5,10 +5,13 @@ class {
 		route( "/", "main.index" )
 
 		// A healthcheck route
-		route( "/healthcheck", ( req, res ) => res.send( "Ok!" ) )
+		get( "/healthcheck", ( req, res ) => res.send( "Ok!" ) )
 
 		// A RESTful route
-		route( "/api/echo", ( req, res ) => res.json( { error: false, data: "Welcome to my awesome API!" } ) )
+		get( "/api/echo", ( req, res ) => res.json( { error: false, data: "Welcome to my awesome API!" } ) )
+
+		// A page with no handler behind it
+		route( "/about" ).as( "about" ).toView( "main/about" )
 
 		// Conventions-based routing
 		route( "/:handler/:action?" ).end()

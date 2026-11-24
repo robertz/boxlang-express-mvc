@@ -6,12 +6,12 @@ class {
 
 	property name="todoService";
 
+	this.prehandler_only = "edit,update,toggle,delete"
+
 	function preHandler( event, rc, prc, action ) {
-		if ( listFindNoCase( "edit,update,toggle,delete", action ) ) {
-			prc.todo = todoService.get( rc.id )
-			if ( prc.todo.isEmpty() ) {
-				event.renderData( type = "text", data = "No such todo", statusCode = 404 )
-			}
+		prc.todo = todoService.get( rc.id )
+		if ( prc.todo.isEmpty() ) {
+			event.renderData( type = "text", data = "No such todo", statusCode = 404 )
 		}
 	}
 
@@ -25,10 +25,9 @@ class {
 	function create( event, rc, prc ) {
 		var title = _cleanTitle( rc )
 		if ( !len( title ) ) {
-			return event.relocate( "todos.index", "error=title" )
-		}
-		if ( !todoService.add( title ) ) {
-			return event.relocate( "todos.index", "error=full" )
+			event.getFlash().put( "error", "A todo needs a title." )
+		} else if ( !todoService.add( title ) ) {
+			event.getFlash().put( "error", "The list is full. Delete something first." )
 		}
 		event.relocate( "todos.index" )
 	}
@@ -40,7 +39,8 @@ class {
 	function update( event, rc, prc ) {
 		var title = _cleanTitle( rc )
 		if ( !len( title ) ) {
-			return event.relocate( event.buildLink( "todos.edit", { id: prc.todo.id, error: "title" } ) )
+			event.getFlash().put( "error", "A todo needs a title." )
+			return event.relocate( event.buildLink( "todos.edit", { id: prc.todo.id } ) )
 		}
 		todoService.rename( prc.todo.id, title )
 		event.relocate( "todos.index" )
