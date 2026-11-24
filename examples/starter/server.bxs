@@ -2,7 +2,7 @@
  * The ColdBox starter template, rebuilt on boxlang-express-mvc. After
  * `boxlang setup-tests.bxs` in the repo root:
  *
- *   cd examples && boxlang server.bxs
+ *   cd examples/starter && boxlang server.bxs
  *
  * This file does the jobs of Application.cfc, index.cfm and
  * config/ColdBox.cfc.

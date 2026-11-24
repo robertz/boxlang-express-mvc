@@ -1,0 +1,15 @@
+class {
+
+	function configure() {
+		route( "/" ).withAction( { GET: "index", POST: "create" } ).toHandler( "todos" )
+		route( "/clear" ).withAction( { POST: "clearCompleted" } ).toHandler( "todos" )
+
+		route( "/todos/:id(\d+)" ).withAction( { GET: "edit", POST: "update" } ).toHandler( "todos" )
+		route( "/todos/:id(\d+)/toggle" ).withAction( { POST: "toggle" } ).toHandler( "todos" )
+		route( "/todos/:id(\d+)/delete" ).withAction( { POST: "delete" } ).toHandler( "todos" )
+
+		route( "/api/todos" ).withAction( { GET: "data" } ).toHandler( "todos" )
+		route( "/healthcheck", ( req, res ) => res.send( "Ok!" ) )
+	}
+
+}

@@ -83,7 +83,9 @@ class {
 </bx:output>
 ```
 
-A complete app is in [examples/](examples/).
+Two complete apps are in [examples/](examples/): `starter`, a rebuild of
+the ColdBox starter template, and `todo`, a todo list with forms, a
+service and a partial.
 
 ## Handlers are shared between requests
 

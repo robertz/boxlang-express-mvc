@@ -1,0 +1,72 @@
+/**
+ * One instance serves every request. Request data goes in rc, prc and
+ * local variables, never in the variables scope.
+ */
+class {
+
+	property name="todoService";
+
+	function preHandler( event, rc, prc, action ) {
+		if ( listFindNoCase( "edit,update,toggle,delete", action ) ) {
+			prc.todo = todoService.get( rc.id )
+			if ( prc.todo.isEmpty() ) {
+				event.renderData( type = "text", data = "No such todo", statusCode = 404 )
+			}
+		}
+	}
+
+	function index( event, rc, prc ) {
+		prc.filter = listFindNoCase( "active,done", event.getValue( "filter", "all" ) ) ? lCase( rc.filter ) : "all"
+		prc.todos = todoService.list( prc.filter )
+		prc.counts = todoService.counts()
+		prc.title = "Todos"
+	}
+
+	function create( event, rc, prc ) {
+		var title = _cleanTitle( rc )
+		if ( !len( title ) ) {
+			return event.relocate( "todos.index", "error=title" )
+		}
+		todoService.add( title )
+		event.relocate( "todos.index" )
+	}
+
+	function edit( event, rc, prc ) {
+		prc.title = "Edit todo"
+	}
+
+	function update( event, rc, prc ) {
+		var title = _cleanTitle( rc )
+		if ( !len( title ) ) {
+			return event.relocate( event.buildLink( "todos.edit", { id: prc.todo.id, error: "title" } ) )
+		}
+		todoService.rename( prc.todo.id, title )
+		event.relocate( "todos.index" )
+	}
+
+	function toggle( event, rc, prc ) {
+		todoService.toggle( prc.todo.id )
+		event.relocate( "todos.index" )
+	}
+
+	function delete( event, rc, prc ) {
+		todoService.remove( prc.todo.id )
+		event.relocate( "todos.index" )
+	}
+
+	function clearCompleted( event, rc, prc ) {
+		todoService.clearCompleted()
+		event.relocate( "todos.index" )
+	}
+
+	function data( event, rc, prc ) {
+		event.renderData( type = "json", data = todoService.list( "all" ) )
+	}
+
+	// A field sent twice arrives as an array, so check before treating it as text.
+	private function _cleanTitle( rc ) {
+		var title = rc.title ?: ""
+		return isSimpleValue( title ) ? trim( title ).mid( 1, 200 ) : ""
+	}
+
+}

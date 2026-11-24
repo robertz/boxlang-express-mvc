@@ -1,0 +1,31 @@
+/**
+ * A todo list on boxlang-express-mvc.
+ *
+ *   boxlang server.bxs        (from this directory)
+ */
+app = boxExpress()
+app.set( "env", getSystemSetting( "APP_ENV", "production" ) )
+app.use( boxExpressUrlencoded() )
+
+// One instance of each service, built before listen(). Handlers are
+// shared by every request, so a service has to be safe to call from
+// many threads at once.
+svc = { todoService: new models.TodoService() }
+
+mvc = boxExpressMvc( {
+	handlers: expandPath( "./handlers" ),
+	views: expandPath( "./views" ),
+	layouts: expandPath( "./layouts" ),
+	routes: expandPath( "./config/Router.bx" ),
+	services: svc
+} )
+app.use( mvc.router() )
+
+app.use( ( req, res, next ) => res.status( 404 ).send( "Page not found" ) )
+
+app.use( ( err, req, res, next ) => {
+	println( "Error on #req.method# #req.originalUrl#: #err.message#" )
+	res.status( 500 ).send( "Something went wrong." )
+} )
+
+app.listen( getSystemSetting( "PORT", 3000 ), ( port ) => println( "http://localhost:#port#" ) )

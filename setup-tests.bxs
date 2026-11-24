@@ -16,13 +16,16 @@ if ( !fileExists( express & "/ModuleConfig.bx" ) ) {
 }
 
 files.createDirectories( paths.get( expandPath( "boxlang_modules" ) ) )
-files.createDirectories( paths.get( expandPath( "examples/boxlang_modules" ) ) )
+files.createDirectories( paths.get( expandPath( "examples/starter/boxlang_modules" ) ) )
+files.createDirectories( paths.get( expandPath( "examples/todo/boxlang_modules" ) ) )
 links = [
 	"boxlang_modules/boxexpressmvc": "..",
 	"boxlang_modules/boxexpress": express,
 	"testbox": express & "/testbox",
-	"examples/boxlang_modules/boxexpressmvc": "../..",
-	"examples/boxlang_modules/boxexpress": express
+	"examples/starter/boxlang_modules/boxexpressmvc": "../../..",
+	"examples/starter/boxlang_modules/boxexpress": express,
+	"examples/todo/boxlang_modules/boxexpressmvc": "../../..",
+	"examples/todo/boxlang_modules/boxexpress": express
 ]
 for ( link in links ) {
 	if ( !files.exists( paths.get( expandPath( link ) ), [] ) ) {

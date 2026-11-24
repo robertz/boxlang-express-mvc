@@ -3,4 +3,4 @@
 /tests/results/
 .DS_Store
 /wirebox
-/examples/boxlang_modules
+/examples/*/boxlang_modules/

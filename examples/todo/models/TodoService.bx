@@ -1,0 +1,65 @@
+/**
+ * An in-memory store, shared by every request. A todo is never changed
+ * in place: each write puts a new struct, so a reader never sees one
+ * half-updated.
+ */
+class {
+
+	function init() {
+		variables.todos = createObject( "java", "java.util.concurrent.ConcurrentHashMap" ).init()
+		variables.nextId = createObject( "java", "java.util.concurrent.atomic.AtomicInteger" ).init( 0 )
+		add( "Read the README" )
+		add( "Write a handler" )
+		toggle( 1 )
+		return this
+	}
+
+	function list( filter = "all" ) {
+		var all = []
+		for ( var key in variables.todos.keySet().toArray() ) {
+			var todo = variables.todos.get( key )
+			if ( filter == "all" || ( filter == "done" ) == todo.done ) {
+				all.append( todo )
+			}
+		}
+		return all.sort( ( a, b ) => a.id - b.id )
+	}
+
+	function get( id ) {
+		if ( !isValid( "integer", id ) ) {
+			return {}
+		}
+		return variables.todos.get( javacast( "int", id ) ) ?: {}
+	}
+
+	function counts() {
+		var all = list()
+		var done = all.filter( ( todo ) => todo.done ).len()
+		return { all: all.len(), done: done, active: all.len() - done }
+	}
+
+	function add( title ) {
+		var id = variables.nextId.incrementAndGet()
+		variables.todos.put( javacast( "int", id ), { id: id, title: title, done: false } )
+		return id
+	}
+
+	function rename( id, title ) {
+		variables.todos.computeIfPresent( javacast( "int", id ), ( key, todo ) => { return { id: todo.id, title: title, done: todo.done } } )
+	}
+
+	function toggle( id ) {
+		variables.todos.computeIfPresent( javacast( "int", id ), ( key, todo ) => { return { id: todo.id, title: todo.title, done: !todo.done } } )
+	}
+
+	function remove( id ) {
+		variables.todos.remove( javacast( "int", id ) )
+	}
+
+	function clearCompleted() {
+		for ( var todo in list( "done" ) ) {
+			remove( todo.id )
+		}
+	}
+
+}

@@ -1,0 +1,31 @@
+<bx:output>
+<form method="post" action="#event.buildLink( "todos.create" )#">
+	<input type="text" name="title" placeholder="What needs doing?" maxlength="200" autofocus>
+	<button>Add</button>
+</form>
+<bx:if ( rc.error ?: "" ) == "title">
+	<p class="error">A todo needs a title.</p>
+</bx:if>
+
+<nav>
+<bx:loop list="all,active,done" item="name">
+	<a href="#event.buildLink( "todos.index", name == "all" ? {} : { filter: name } )#" class="#name == prc.filter ? "current" : ""#">#name# (#prc.counts[ name ]#)</a>
+</bx:loop>
+</nav>
+
+<ul>
+<bx:loop array="#prc.todos#" item="todo">
+	#view( "todos/item", { todo: todo } )#
+</bx:loop>
+</ul>
+<bx:if prc.todos.isEmpty()>
+	<p>Nothing here.</p>
+</bx:if>
+
+<footer>
+	<span>#prc.counts.active# left</span>
+	<bx:if prc.counts.done GT 0>
+		<form method="post" action="#event.buildLink( "todos.clearCompleted" )#"><button>Clear completed</button></form>
+	</bx:if>
+</footer>
+</bx:output>
