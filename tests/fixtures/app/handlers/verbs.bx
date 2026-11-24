@@ -1,0 +1,33 @@
+class {
+
+	this.allowedMethods = { wipe: "POST,DELETE", read: [ "get" ] }
+
+	function index( event, rc, prc ) {
+		event.renderData( type = "text", data = "index" )
+	}
+
+	function wipe( event, rc, prc ) {
+		event.renderData( type = "text", data = "wiped by " & event.getHTTPMethod() )
+	}
+
+	function read( event, rc, prc ) {
+		event.renderData( type = "text", data = "read" )
+	}
+
+	function go( event, rc, prc ) {
+		event.relocate( rc.to )
+	}
+
+	function link( event, rc, prc ) {
+		event.renderData( type = "text", data = event.buildLink( "verbs.index", rc ) )
+	}
+
+	function helper( title, extra = "" ) {
+		return "not an action"
+	}
+
+	function noArgs() {
+		return "not an action"
+	}
+
+}

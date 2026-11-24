@@ -80,11 +80,14 @@ them as scopes.
 - **Routes fail at startup.** A route to a handler or action that
   doesn't exist, or a pattern BoxExpress can't match (an optional
   segment in the middle of a path), throws when the app starts.
-- **`to()` answers every verb**, as in ColdBox, and there is no
-  `this.allowedMethods`. Use `withAction()` or `resources()` to restrict
-  verbs.
-- **Views are not escaped**, the same as in ColdBox. Use
-  `encodeForHTML()`.
+- **`to()` answers every verb**, as in ColdBox. Restrict verbs with
+  `this.allowedMethods` on the handler (a wrong verb gets a 405; there
+  is no `onInvalidHTTPMethod`), or with `withAction()` or `resources()`
+  on the route.
+- **An action needs an `event` argument.** A public function without
+  one is a helper and is never routable.
+- **Views are not escaped**, the same as in ColdBox. Install `bx-esapi`
+  and use the `encodeFor…()` functions.
 - **Nothing reloads on its own** except `.bxm` files. Use
   `app.set( "reloadOnChange", true )` in development; there is no
   `?fwreinit`.
@@ -97,7 +100,7 @@ them as scopes.
   covers "just before the response goes out".
 - HMVC modules
 - `aroundHandler`, `onMissingAction`, `onError`, `onInvalidHTTPMethod`,
-  `this.allowedMethods`, `this.prehandler_only`
+  `this.prehandler_only`
 - Router extras: `withSSL()`, `withNamespace()`, `withDomain()`,
   `group()`, `toRedirect()`, `get()` / `post()` shortcuts, nested
   resources

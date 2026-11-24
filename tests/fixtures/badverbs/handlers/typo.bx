@@ -1,0 +1,7 @@
+class {
+
+	this.allowedMethods = { remove: "POST" }
+
+	function index( event, rc, prc ) {}
+
+}

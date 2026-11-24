@@ -140,10 +140,14 @@ class {
 	}
 
 	/**
-	 * to is a URL (starts with "/" or has a scheme), a route name, or a
-	 * "handler.action".
+	 * to is a path on this site (starts with one "/"), a URL with a
+	 * scheme, a route name, or a "handler.action". A browser reads
+	 * "//host" and "/\host" as another site, so those are refused.
 	 */
 	function relocate( to, queryString = "", statusCode = 302 ) {
+		if ( reFind( "^[/\\]\s*[/\\]", to ) ) {
+			throw( type = "BoxExpressMvc.InvalidRelocation", message = "relocate() will not redirect to [#to#]: it looks like a path but a browser reads it as another site. Use a full URL with a scheme for that" )
+		}
 		var target = ( to.left( 1 ) == "/" || find( "://", to ) ) ? to : buildLink( to )
 		if ( len( queryString ) ) {
 			target &= ( find( "?", target ) ? "&" : "?" ) & queryString

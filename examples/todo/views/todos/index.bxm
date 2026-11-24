@@ -1,11 +1,14 @@
 <bx:output>
 <form method="post" action="#event.buildLink( "todos.create" )#">
-	<input type="hidden" name="_csrf" value="#encodeForHTML( event.getRequest().csrfToken() )#">
+	<input type="hidden" name="_csrf" value="#encodeForHTMLAttribute( event.getRequest().csrfToken() )#">
 	<input type="text" name="title" placeholder="What needs doing?" maxlength="200" autofocus>
 	<button>Add</button>
 </form>
 <bx:if ( rc.error ?: "" ) == "title">
 	<p class="error">A todo needs a title.</p>
+</bx:if>
+<bx:if ( rc.error ?: "" ) == "full">
+	<p class="error">The list is full. Delete something first.</p>
 </bx:if>
 
 <nav>
@@ -26,7 +29,7 @@
 <footer>
 	<span>#prc.counts.active# left</span>
 	<bx:if prc.counts.done GT 0>
-		<form method="post" action="#event.buildLink( "todos.clearCompleted" )#"><input type="hidden" name="_csrf" value="#encodeForHTML( event.getRequest().csrfToken() )#"><button>Clear completed</button></form>
+		<form method="post" action="#event.buildLink( "todos.clearCompleted" )#"><input type="hidden" name="_csrf" value="#encodeForHTMLAttribute( event.getRequest().csrfToken() )#"><button>Clear completed</button></form>
 	</bx:if>
 </footer>
 </bx:output>

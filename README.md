@@ -21,7 +21,7 @@ image.
 ```
 myapp/
   server.bxs
-  boxlang_modules/        boxexpress and boxexpressmvc
+  boxlang_modules/        boxexpress, boxexpressmvc and bx-esapi
   config/Router.bx
   handlers/items.bx
   views/items/index.bxm
@@ -129,8 +129,10 @@ added later throws.
 
 ## Actions
 
-An action is any public function on a handler:
-`function name( event, rc, prc )`.
+An action is a public function on a handler whose first argument is
+named `event`: `function name( event, rc, prc )`. Any other public
+function is a helper and can't be routed to, though `private` says so
+more clearly.
 
 - **`rc`** is a new struct for each request holding `req.query`, then
   `req.body` (when a body parser produced a struct), then `req.params`.
@@ -146,7 +148,7 @@ An action is any public function on a handler:
 | `getCollection()`, `getPrivateCollection()` | `rc` and `prc`. |
 | `setView( view, layout )`, `setLayout( name )`, `noLayout()`, `noRender()` | Choose what is rendered. `noRender()` ends the response with no body. |
 | `renderData( type, data, statusCode, contentType )` | Sends now. `type` is `json` (default), `html`, `text` or `xml`. JSON takes a plain struct or array; the others take a string. |
-| `relocate( to, queryString, statusCode )` | Redirects. `to` is a URL (starts with `/` or has a scheme), a route name or a `handler.action`. |
+| `relocate( to, queryString, statusCode )` | Redirects. `to` is a path (starts with one `/`), a URL with a scheme, a route name or a `handler.action`. |
 | `buildLink( to, params )` | The URL of a route name or `handler.action`. `params` fill `:placeholders`; the rest become the query string. |
 | `setHTTPHeader( name, value )`, `setStatusCode( code )` | |
 | `getHTTPMethod()`, `getHTTPHeader( name, defaultValue )` | |
@@ -169,6 +171,35 @@ are skipped.**
 
 An error thrown anywhere in that sequence goes to the app's error
 handler (`app.use( ( err, req, res, next ) => … )`).
+
+### `this.allowedMethods`
+
+```js
+class {
+
+	this.allowedMethods = { delete: "POST,DELETE", save: "POST" }
+
+	function delete( event, rc, prc ) { … }
+
+}
+```
+
+A request for a listed action with any other method gets a `405` and an
+`Allow` header, whichever route it came in on. `HEAD` counts as `GET`.
+An action that isn't listed answers every method. A name that isn't an
+action, or a method that doesn't exist, throws at startup.
+
+**List every action that changes data.** `route().to()` and the
+convention route answer every method, and `boxExpressCsrf()` does not
+check a `GET`, so without this a link or an image tag on another site
+can run the action for a signed-in visitor.
+
+### Redirecting to something a visitor sent
+
+`relocate()` refuses `//host` and `/\host`, which look like paths but
+send a browser to another site. It does follow a full URL, so a value
+such as `rc.returnTo` still needs checking before it is passed in:
+accept it only if it starts with a single `/`.
 
 ## Routes
 
@@ -232,10 +263,11 @@ at `/handler/action`, with `index` as the default action. It is opt-in
 and always registered after every other route.
 
 **It answers every HTTP method, so a GET can reach an action that
-changes data.** Leave it out, or keep state-changing actions on explicit
-routes, unless every such action checks the method itself. Only public
-actions are reachable; `init`, `preHandler`, `postHandler` and private
-functions answer 404, as does an unknown handler or action. A nested
+changes data.** List those actions in
+[`this.allowedMethods`](#thisallowedmethods), or leave this route out.
+Only actions are reachable; `init`, `preHandler`, `postHandler`, private
+functions and public functions without an `event` argument answer 404,
+as does an unknown handler or action. A nested
 handler is reached with its dotted name: `/admin.users/list`.
 
 ## Views and layouts
@@ -243,17 +275,26 @@ handler is reached with its dotted name: `/admin.users/list`.
 Views and layouts are `.bxm` files. Each sees `rc`, `prc` and `event`.
 `#…#` is only evaluated inside `<bx:output>`.
 
-**Output is not escaped.** Wrap anything that came from a user in
-`encodeForHTML()`:
+**Output is not escaped.** Wrap anything that came from a user in the
+encoder for where it lands:
 
 ```html
-<bx:output><h1>#encodeForHTML( prc.item.name )#</h1></bx:output>
+<bx:output>
+<h1>#encodeForHTML( prc.item.name )#</h1>
+<input name="name" value="#encodeForHTMLAttribute( prc.item.name )#">
+</bx:output>
 ```
 
-`encodeForHTML()` is part of BoxLang and also escapes quotes, so it is
-safe inside a double-quoted attribute. `encodeForHTMLAttribute()` and
-the other `encodeFor…()` functions come from the `bx-esapi` module and
-don't exist unless you install it.
+Install [`bx-esapi`](https://forgebox.io/view/bx-esapi) in every app:
+
+```bash
+install-bx-module boxlang-express boxlang-express-mvc bx-esapi --local
+```
+
+Only `encodeForHTML()` is part of BoxLang itself.
+`encodeForHTMLAttribute()`, `encodeForURL()`, `encodeForJavaScript()`
+and the rest come from `bx-esapi`, and a view that calls one without
+the module fails with "Function not found".
 
 In a layout, `#view()#` is the rendered view. Anywhere,
 `#view( "partials/nav", { active: "items" } )#` renders another view

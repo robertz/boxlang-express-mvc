@@ -152,6 +152,13 @@ class {
 
 	function runEvent( entry, action, req, res, next ) {
 		try {
+			if ( entry.allowed.keyExists( action ) ) {
+				var allowed = entry.allowed[ action ]
+				var method = req.method == "HEAD" ? "GET" : req.method
+				if ( !allowed.findNoCase( method ) ) {
+					return res.status( 405 ).set( "Allow", allowed.toList( ", " ) ).send( "Method Not Allowed" )
+				}
+			}
 			var rc = _buildRc( req )
 			var prc = res.locals
 			var event = new Event( this, req, res, rc, entry.name, action )
@@ -204,7 +211,7 @@ class {
 		var encoder = createObject( "java", "java.net.URLEncoder" )
 		var query = []
 		for ( var key in linkParams ) {
-			var placeholder = ":#key#(\([^)]*\))?\??(?![A-Za-z0-9_])"
+			var placeholder = ":" & createObject( "java", "java.util.regex.Pattern" ).quote( key ) & "(\([^)]*\))?\??(?![A-Za-z0-9_])"
 			var value = toString( linkParams[ key ] )
 			if ( reFindNoCase( placeholder, path ) ) {
 				var segment = encoder.encode( value, "UTF-8" ).replace( "+", "%20" )
@@ -373,6 +380,48 @@ class {
 		return { handler: parts.toList( "." ), action: action }
 	}
 
+	/**
+	 * A public function is an action only if its first argument is named
+	 * event, so a public helper is never routable.
+	 */
+	private function _isAction( fn ) {
+		if ( ( fn.access ?: "public" ) != "public" || listFindNoCase( static.RESERVED_ACTIONS, fn.name ) ) {
+			return false
+		}
+		var params = fn.parameters ?: []
+		return params.len() > 0 && params[ 1 ].name == "event"
+	}
+
+	/**
+	 * this.allowedMethods = { delete: "POST,DELETE" } on a handler: an
+	 * action name to the methods it answers. Checked on every route to
+	 * the action, the convention route included.
+	 */
+	private function _allowedMethods( name, instance, actions ) {
+		var declared = instance.allowedMethods ?: {}
+		if ( !isStruct( declared ) ) {
+			throw( type = "BoxExpressMvc.InvalidHandler", message = "Handler [#name#]: this.allowedMethods must be a struct of action name to HTTP methods" )
+		}
+		var allowed = {}
+		for ( var actionName in declared ) {
+			if ( !actions.keyExists( actionName ) ) {
+				throw( type = "BoxExpressMvc.InvalidHandler", message = "Handler [#name#]: this.allowedMethods names [#actionName#], which is not an action" )
+			}
+			var methods = isArray( declared[ actionName ] ) ? declared[ actionName ] : listToArray( declared[ actionName ] )
+			methods = methods.map( ( method ) => uCase( trim( method ) ) )
+			if ( methods.isEmpty() ) {
+				throw( type = "BoxExpressMvc.InvalidHandler", message = "Handler [#name#]: this.allowedMethods.#actionName# lists no methods" )
+			}
+			for ( var method in methods ) {
+				if ( method == "ALL" || !listFind( static.HTTP_METHODS, method ) ) {
+					throw( type = "BoxExpressMvc.InvalidHandler", message = "Handler [#name#]: this.allowedMethods.#actionName# has an unknown HTTP method [#method#]" )
+				}
+			}
+			allowed[ actions[ actionName ] ] = methods
+		}
+		return allowed
+	}
+
 	private function _loadHandlers( dir ) {
 		var root = createObject( "java", "java.io.File" ).init( dir ).getCanonicalPath()
 		var mapping = "bxmvc_" & lCase( hash( root ) ).mid( 1, 12 )
@@ -392,7 +441,7 @@ class {
 			var md = getMetadata( instance )
 			while ( true ) {
 				for ( var fn in md.functions ?: [] ) {
-					if ( ( fn.access ?: "public" ) == "public" && !listFindNoCase( static.RESERVED_ACTIONS, fn.name ) && !actions.keyExists( fn.name ) ) {
+					if ( _isAction( fn ) && !actions.keyExists( fn.name ) ) {
 						actions[ fn.name ] = fn.name
 					}
 				}
@@ -405,6 +454,7 @@ class {
 				name: name,
 				instance: instance,
 				actions: actions,
+				allowed: _allowedMethods( name, instance, actions ),
 				hasPreHandler: structKeyExists( instance, "preHandler" ),
 				hasPostHandler: structKeyExists( instance, "postHandler" )
 			}

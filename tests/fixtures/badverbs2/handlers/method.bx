@@ -1,0 +1,7 @@
+class {
+
+	this.allowedMethods = { index: "GET,FETCH" }
+
+	function index( event, rc, prc ) {}
+
+}

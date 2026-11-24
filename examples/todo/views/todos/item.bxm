@@ -1,13 +1,13 @@
 <bx:output>
 <li class="#args.todo.done ? "done" : ""#">
 	<form method="post" action="#event.buildLink( "todos.toggle", { id: args.todo.id } )#">
-		<input type="hidden" name="_csrf" value="#encodeForHTML( event.getRequest().csrfToken() )#">
+		<input type="hidden" name="_csrf" value="#encodeForHTMLAttribute( event.getRequest().csrfToken() )#">
 		<button title="Toggle">#args.todo.done ? "&##9745;" : "&##9744;"#</button>
 	</form>
 	<span class="title">#encodeForHTML( args.todo.title )#</span>
 	<a href="#event.buildLink( "todos.edit", { id: args.todo.id } )#">edit</a>
 	<form method="post" action="#event.buildLink( "todos.delete", { id: args.todo.id } )#">
-		<input type="hidden" name="_csrf" value="#encodeForHTML( event.getRequest().csrfToken() )#">
+		<input type="hidden" name="_csrf" value="#encodeForHTMLAttribute( event.getRequest().csrfToken() )#">
 		<button title="Delete">&times;</button>
 	</form>
 </li>

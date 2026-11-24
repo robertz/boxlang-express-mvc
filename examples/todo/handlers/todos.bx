@@ -27,7 +27,9 @@ class {
 		if ( !len( title ) ) {
 			return event.relocate( "todos.index", "error=title" )
 		}
-		todoService.add( title )
+		if ( !todoService.add( title ) ) {
+			return event.relocate( "todos.index", "error=full" )
+		}
 		event.relocate( "todos.index" )
 	}
 

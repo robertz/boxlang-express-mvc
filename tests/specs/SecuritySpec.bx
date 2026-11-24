@@ -1,0 +1,100 @@
+class extends="testbox.system.BaseSpec" {
+
+	private function _enc( value ) {
+		return createObject( "java", "java.net.URLEncoder" ).encode( value, "UTF-8" )
+	}
+
+	function beforeAll() {
+		var mvc = boxExpressMvc( { handlers: expandPath( "tests/fixtures/app/handlers" ) } )
+		mvc.route( "/explicit/wipe" ).to( "verbs.wipe" )
+		mvc.route( "/:handler/:action?" ).end()
+		variables.mvc = mvc
+		variables.app = boxExpress()
+		variables.app.use( boxExpressUrlencoded() )
+		variables.app.use( mvc.router() )
+		variables.app.use( ( err, req, res, next ) => res.status( 500 ).json( { type: err.type } ) )
+	}
+
+	function run() {
+
+		describe( "this.allowedMethods", function() {
+
+			it( "answers 405 with an Allow header on the convention route", function() {
+				var res = variables.app.inject( "/verbs/wipe" )
+				expect( res.statusCode ).toBe( 405 )
+				expect( res.headers.allow ).toBe( "POST, DELETE" )
+				expect( res.body ).notToInclude( "wiped" )
+			} )
+
+			it( "answers 405 on a to() route, which registers every method", function() {
+				expect( variables.app.inject( "/explicit/wipe" ).statusCode ).toBe( 405 )
+				expect( variables.app.inject( { method: "PUT", url: "/explicit/wipe" } ).statusCode ).toBe( 405 )
+			} )
+
+			it( "runs the action for a listed method", function() {
+				expect( variables.app.inject( { method: "POST", url: "/verbs/wipe" } ).body ).toBe( "wiped by POST" )
+				expect( variables.app.inject( { method: "DELETE", url: "/explicit/wipe" } ).body ).toBe( "wiped by DELETE" )
+			} )
+
+			it( "takes an array, in any case, and lets HEAD through where GET is listed", function() {
+				expect( variables.app.inject( "/verbs/read" ).body ).toBe( "read" )
+				expect( variables.app.inject( { method: "HEAD", url: "/verbs/read" } ).statusCode ).toBe( 200 )
+				expect( variables.app.inject( { method: "POST", url: "/verbs/read" } ).statusCode ).toBe( 405 )
+			} )
+
+			it( "leaves an action it doesn't name open to every method", function() {
+				expect( variables.app.inject( { method: "POST", url: "/verbs" } ).body ).toBe( "index" )
+			} )
+
+			it( "fails at startup for an unknown action or method", function() {
+				expect( () => boxExpressMvc( { handlers: expandPath( "tests/fixtures/badverbs/handlers" ) } ) ).toThrow( "BoxExpressMvc.InvalidHandler" )
+				expect( () => boxExpressMvc( { handlers: expandPath( "tests/fixtures/badverbs2/handlers" ) } ) ).toThrow( "BoxExpressMvc.InvalidHandler" )
+			} )
+
+		} )
+
+		describe( "what counts as an action", function() {
+
+			it( "leaves out a public function whose first argument isn't event", function() {
+				expect( variables.mvc.getHandlers().verbs ).toBe( [ "go", "index", "link", "read", "wipe" ] )
+				expect( variables.app.inject( "/verbs/helper" ).statusCode ).toBe( 404 )
+				expect( variables.app.inject( "/verbs/noArgs" ).statusCode ).toBe( 404 )
+			} )
+
+			it( "refuses an explicit route to one", function() {
+				var mvc = boxExpressMvc( { handlers: expandPath( "tests/fixtures/app/handlers" ) } )
+				expect( () => mvc.route( "/h" ).to( "verbs.helper" ) ).toThrow( "BoxExpressMvc.UnknownAction" )
+			} )
+
+		} )
+
+		describe( "relocate()", function() {
+
+			it( "refuses a path a browser reads as another site", function() {
+				for ( var target in [ "//evil.example/x", "/\evil.example", "\\evil.example", "/ /evil.example" ] ) {
+					var res = variables.app.inject( "/verbs/go?to=" & _enc( target ) )
+					expect( res.statusCode ).toBe( 500 )
+					expect( res.json().type ).toBe( "BoxExpressMvc.InvalidRelocation" )
+				}
+			} )
+
+			it( "still redirects to a local path or a full URL", function() {
+				expect( variables.app.inject( "/verbs/go?to=/items/3" ).headers.location ).toBe( "/items/3" )
+				expect( variables.app.inject( "/verbs/go?to=" & _enc( "https://example.com/a" ) ).headers.location ).toBe( "https://example.com/a" )
+			} )
+
+		} )
+
+		describe( "buildLink()", function() {
+
+			it( "treats a param name as text, not as a regex", function() {
+				var res = variables.app.inject( "/verbs/link?" & _enc( "(a+)+$" ) & "=1&" & _enc( "[" ) & "=2" )
+				expect( res.statusCode ).toBe( 200 )
+				expect( res.body ).toInclude( "%28a%2B%29%2B%24=1" )
+			} )
+
+		} )
+
+	}
+
+}

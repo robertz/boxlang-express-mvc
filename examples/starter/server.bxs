@@ -8,9 +8,10 @@
  * config/ColdBox.cfc.
  */
 app = boxExpress()
-app.set( "env", getSystemSetting( "APP_ENV", "development" ) )
+app.set( "env", getSystemSetting( "APP_ENV", "production" ) )
 app.locals.appName = "Your app name here"
 
+app.use( boxExpressHelmet() )
 app.use( "/includes", boxExpressStatic( expandPath( "./includes" ) ) )
 app.use( boxExpressJSON(), boxExpressUrlencoded() )
 

@@ -5,6 +5,11 @@
  */
 class {
 
+	static {
+		// Anyone can add a todo, so the list needs a ceiling.
+		MAX_TODOS = 200
+	}
+
 	function init() {
 		variables.todos = createObject( "java", "java.util.concurrent.ConcurrentHashMap" ).init()
 		variables.nextId = createObject( "java", "java.util.concurrent.atomic.AtomicInteger" ).init( 0 )
@@ -38,7 +43,14 @@ class {
 		return { all: all.len(), done: done, active: all.len() - done }
 	}
 
+	function isFull() {
+		return variables.todos.size() >= static.MAX_TODOS
+	}
+
 	function add( title ) {
+		if ( isFull() ) {
+			return 0
+		}
 		var id = variables.nextId.incrementAndGet()
 		variables.todos.put( javacast( "int", id ), { id: id, title: title, done: false } )
 		return id

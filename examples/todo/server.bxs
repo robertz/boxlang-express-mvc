@@ -9,6 +9,17 @@ app.set( "env", getSystemSetting( "APP_ENV", "production" ) )
 // file restarts the server. Views never need it.
 app.set( "reloadOnChange", app.getSetting( "env" ) == "development" )
 
+// Behind a reverse proxy, also set "trust proxy" so req.ip is the
+// visitor and not the proxy; otherwise everyone shares one rate limit.
+app.use( boxExpressHelmet( {
+	frameOptions: "DENY",
+	contentSecurityPolicy: "default-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'"
+} ) )
+app.use( boxExpressRateLimit( {
+	max: 120,
+	handler: ( req, res, next, info ) => res.status( 429 ).send( "Too many requests. Try again in a minute." )
+} ) )
+
 // Every form posts a token that has to match the one in the visitor's
 // session (the views get it from event.getRequest().csrfToken()). The
 // session comes first, then the form parser, then the check.
