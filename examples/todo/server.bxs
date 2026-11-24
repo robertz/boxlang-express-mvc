@@ -5,7 +5,16 @@
  */
 app = boxExpress()
 app.set( "env", getSystemSetting( "APP_ENV", "production" ) )
+// With APP_ENV=development, an edit to a handler, model or the routes
+// file restarts the server. Views never need it.
+app.set( "reloadOnChange", app.getSetting( "env" ) == "development" )
+
+// Every form posts a token that has to match the one in the visitor's
+// session (the views get it from event.getRequest().csrfToken()). The
+// session comes first, then the form parser, then the check.
+app.use( boxExpressSession( { saveUninitialized: false } ) )
 app.use( boxExpressUrlencoded() )
+app.use( boxExpressCsrf() )
 
 // One instance of each service, built before listen(). Handlers are
 // shared by every request, so a service has to be safe to call from

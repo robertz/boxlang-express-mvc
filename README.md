@@ -12,7 +12,9 @@ do not run on it. Coming from ColdBox? Read
 Everything here compiles to plain BoxExpress routes when the app starts.
 Nothing is scanned or looked up on disk per request.
 
-Needs BoxExpress 0.2.27 or later and BoxLang 1.15 or later.
+Needs BoxExpress 0.2.27 or later and BoxLang 1.15 or later. The test
+suite runs on BoxLang 1.15 through 1.19 and in the `boxlang:cli` Docker
+image.
 
 ## Quick start
 
@@ -85,7 +87,7 @@ class {
 
 Two complete apps are in [examples/](examples/): `starter`, a rebuild of
 the ColdBox starter template, and `todo`, a todo list with forms, a
-service and a partial.
+service, a partial, sessions with CSRF protection, and a Dockerfile.
 
 ## Handlers are shared between requests
 
@@ -248,6 +250,11 @@ Views and layouts are `.bxm` files. Each sees `rc`, `prc` and `event`.
 <bx:output><h1>#encodeForHTML( prc.item.name )#</h1></bx:output>
 ```
 
+`encodeForHTML()` is part of BoxLang and also escapes quotes, so it is
+safe inside a double-quoted attribute. `encodeForHTMLAttribute()` and
+the other `encodeFor…()` functions come from the `bx-esapi` module and
+don't exist unless you install it.
+
 In a layout, `#view()#` is the rendered view. Anywhere,
 `#view( "partials/nav", { active: "items" } )#` renders another view
 inline; that view reads what it was passed as `args.active`.
@@ -261,7 +268,8 @@ apply here, and `res.render()` still works in plain-function routes.
 
 Edits to `.bxm` files show up without a restart. Handlers and the routes
 file are loaded once; restart, or use BoxExpress's
-`app.set( "reloadOnChange", true )`.
+`app.set( "reloadOnChange", true )`, which restarts the server when a
+handler, model or the routes file changes.
 
 ## Services
 
@@ -291,8 +299,8 @@ class {
 }
 ```
 
-Tested with WireBox 8.3 on BoxLang 1.19. It adds about a second and a
-half to startup.
+Tested with WireBox 8.3, including in the `boxlang:cli` Docker image. It
+adds about a second and a half to startup.
 
 ## Testing
 

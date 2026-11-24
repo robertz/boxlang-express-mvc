@@ -1,6 +1,7 @@
 <bx:output>
 <form method="post" action="#event.buildLink( "todos.update", { id: prc.todo.id } )#">
-	<input type="text" name="title" value="#encodeForHTMLAttribute( prc.todo.title )#" maxlength="200" autofocus>
+	<input type="hidden" name="_csrf" value="#encodeForHTML( event.getRequest().csrfToken() )#">
+	<input type="text" name="title" value="#encodeForHTML( prc.todo.title )#" maxlength="200" autofocus>
 	<button>Save</button>
 	<a href="#event.buildLink( "todos.index" )#">Cancel</a>
 </form>

@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        boxlang: [ "cli-1.19.0", "cli" ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: boxlang-express-mvc
+
+      - uses: actions/checkout@v4
+        with:
+          repository: robertz/boxlang-express
+          path: boxlang-express
+
+      # TestBox comes from BoxExpress's box.json; WireBox is only needed
+      # for the injector spec, which skips itself without it.
+      - name: Install TestBox and WireBox
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work/boxlang-express ortussolutions/commandbox:jdk21-alpine-3.24.0 box install
+          docker run --rm -v "$PWD:/work" -w /work/boxlang-express-mvc ortussolutions/commandbox:jdk21-alpine-3.24.0 box install wirebox --production
+
+      - name: Run the specs
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work/boxlang-express-mvc ortussolutions/boxlang:${{ matrix.boxlang }} \
+            sh -c "boxlang setup-tests.bxs && boxlang run-tests.bxs"
